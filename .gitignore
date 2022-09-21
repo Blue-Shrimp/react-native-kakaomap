@@ -57,5 +57,14 @@ buck-out/
 
 # CocoaPods
 /ios/Pods/
+# react-native-config
+ios/Config/tmpConfig.xcconfig
+
+.vscode/.react/*
+.vscode/settings.json
+
+/android/app/src/main/assets/index.android.bundle
+/android/app/src/main/res/drawable-*
+/android/app/src/main/res/raw/*
 
 ios/tmp.xcconfig
