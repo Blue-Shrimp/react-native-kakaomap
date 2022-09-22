@@ -22,6 +22,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>${BUILD_VERSION}</string>
+	<key>KAKAO_APP_KEY</key>
+	<string>4126640196ef2ffc7051fdc07c714186</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
