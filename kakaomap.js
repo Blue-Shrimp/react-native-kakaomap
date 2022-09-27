@@ -8,6 +8,9 @@ const MapView = props => {
   return <Map {...props} />
 }
 
-MapView.propTypes = {}
+MapView.propTypes = {
+  markers: PropTypes.any,
+  initialRegion: PropTypes.any,
+}
 
 export default MapView
