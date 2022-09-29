@@ -8,6 +8,7 @@
 #import "KakaoMapView.h"
 
 @implementation KakaoMapView {
+  RCTEventDispatcher *_eventDispatcher;
   MTMapView *_mapView;
 }
 
