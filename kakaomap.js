@@ -12,7 +12,14 @@ const MapView = props => {
     props.onMapDragEnded(event.nativeEvent)
   }
 
-  return <Map {...props} onMapDragEnded={_onMapDragEnded} />
+  const _onMarkerSelect = event => {
+    if (!props.onMapDragEnded) {
+      return
+    }
+    props.onMarkerSelect(event.nativeEvent)
+  }
+
+  return <Map {...props} onMapDragEnded={_onMapDragEnded} onMarkerSelect={_onMarkerSelect} />
 }
 
 MapView.propTypes = {
@@ -20,6 +27,7 @@ MapView.propTypes = {
   initialRegion: PropTypes.any,
   isTracking: PropTypes.bool,
   onMapDragEnded: PropTypes.func,
+  onMarkerSelect: PropTypes.func,
 }
 
 export default MapView

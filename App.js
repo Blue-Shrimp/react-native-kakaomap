@@ -161,10 +161,14 @@ const APP = () => {
     setLocation(current)
   }
 
+  const _onMarkerSelect = event => {
+    console.log(event)
+  }
+
   const markerDatas = [
-    { id: '1', latitude: 37.48496, longitude: 127.03427, markerImage: 'pinMarker' },
-    { id: '2', latitude: 37.48496, longitude: 127.03437, markerImage: 'pinMarker' },
-    { id: '3', latitude: 37.48496, longitude: 127.03447, markerImage: 'pinMarker' },
+    { tag: '1', title: '맛집', latitude: 37.48496, longitude: 127.03427, markerImage: 'marker', markerSelectImage: 'markerSel' },
+    { tag: '2', title: '카페', latitude: 37.48486, longitude: 127.03437, markerImage: 'marker', markerSelectImage: 'markerSel' },
+    { tag: '3', title: '장소', latitude: 37.48476, longitude: 127.03447, markerImage: 'marker', markerSelectImage: 'markerSel' },
   ]
   return (
     <>
@@ -178,6 +182,9 @@ const APP = () => {
           onMapDragEnded={event => {
             _onMapDragEnded(event)
           }}
+          onMarkerSelect={event => {
+            _onMarkerSelect(event)
+          }}
         />
         <TouchableOpacity
           testID={'1515'}
@@ -186,7 +193,7 @@ const APP = () => {
           onPress={() => {
             _onPressCurrentLocation()
           }}>
-          <Image style={styles.currentLoactionIcon} source={require('./images/icReservationLocateNor.png')} />
+          <Image style={styles.currentLoactionIcon} source={require('./images/gps.png')} />
         </TouchableOpacity>
       </SafeAreaView>
     </>
@@ -198,15 +205,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   currentLocationContainer: {
-    width: 56,
-    height: 56,
+    width: 40,
+    height: 40,
     position: 'absolute',
     right: 12,
-    bottom: 12,
+    bottom: 55,
   },
   currentLoactionIcon: {
-    width: 56,
-    height: 56,
+    width: 40,
+    height: 40,
   },
 })
 

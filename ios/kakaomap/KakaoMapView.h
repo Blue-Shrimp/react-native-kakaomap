@@ -28,5 +28,6 @@
 @interface KakaoMapView : MTMapView
 
 @property (nonatomic, copy) RCTDirectEventBlock onMapDragEnded;
+@property (nonatomic, copy) RCTDirectEventBlock onMarkerSelect;
 
 @end

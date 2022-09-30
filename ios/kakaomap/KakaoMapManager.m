@@ -18,6 +18,7 @@
 
 RCT_EXPORT_MODULE(KakaoMap)
 RCT_EXPORT_VIEW_PROPERTY(onMapDragEnded, RCTDirectEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onMarkerSelect, RCTDirectEventBlock)
 
 - (UIView *)view
 {
@@ -51,16 +52,21 @@ RCT_CUSTOM_VIEW_PROPERTY(markers, NSArray , KakaoMapView)
   for (int i = 0; i < [json count]; i++) {
     NSDictionary *dictionary = [json objectAtIndex:i];
     NSString *imageName = [dictionary valueForKey:@"markerImage"];
+    NSString *selectImageName = [dictionary valueForKey:@"markerSelectImage"];
 
     float latdouble = [[dictionary valueForKey:@"latitude"] floatValue];
     float londouble = [[dictionary valueForKey:@"longitude"] floatValue];
 
     MTMapPOIItem* marker = [MTMapPOIItem poiItem];
     
-    marker.itemName = dictionary[@"id"];
+    marker.tag = [[dictionary valueForKey:@"tag"] integerValue];
+    marker.itemName = dictionary[@"title"];
     marker.mapPoint = [MTMapPoint mapPointWithGeoCoord:MTMapPointGeoMake(latdouble, londouble)];
     marker.markerType = MTMapPOIItemMarkerTypeCustomImage;
+    marker.markerSelectedType = MTMapPOIItemMarkerSelectedTypeCustomImage;
     marker.customImageName = imageName;
+    marker.customSelectedImageName = selectImageName;
+    marker.showDisclosureButtonOnCalloutBalloon = NO;
     
     [markerList addObject:marker];
   }
@@ -79,6 +85,7 @@ RCT_CUSTOM_VIEW_PROPERTY(isTracking, NSBool , KakaoMapView)
     }
 }
 
+// 지도 화면의 이동이 끝난 뒤 호출
 - (void)mapView:(MTMapView*)mapView finishedMapMoveAnimation:(MTMapPoint*)mapCenterPoint {
     id event = @{
                  @"action": @"mapDragEnded",
@@ -88,6 +95,21 @@ RCT_CUSTOM_VIEW_PROPERTY(isTracking, NSBool , KakaoMapView)
                         },
                  };
     if (_mapView.onMapDragEnded) _mapView.onMapDragEnded(event);
+}
+
+// 단말 사용자가 POI Item을 선택한 경우 호출
+- (BOOL)mapView:(MTMapView*)mapView selectedPOIItem:(MTMapPOIItem*)poiItem {
+    id event = @{
+                 @"action": @"markerSelect",
+                 @"tag": @(poiItem.tag),
+                 @"coordinate": @{
+                         @"latitude": @(poiItem.mapPoint.mapPointGeo.latitude),
+                         @"longitude": @(poiItem.mapPoint.mapPointGeo.longitude)
+                         }
+                 };
+    if (_mapView.onMarkerSelect) _mapView.onMarkerSelect(event);
+
+    return YES;
 }
 
 @end
