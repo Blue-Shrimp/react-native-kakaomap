@@ -19,6 +19,7 @@
 RCT_EXPORT_MODULE(KakaoMap)
 RCT_EXPORT_VIEW_PROPERTY(onMapDragEnded, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(onMarkerSelect, RCTDirectEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onMapTouch, RCTDirectEventBlock)
 
 - (UIView *)view
 {
@@ -110,6 +111,18 @@ RCT_CUSTOM_VIEW_PROPERTY(isTracking, NSBool , KakaoMapView)
     if (_mapView.onMarkerSelect) _mapView.onMarkerSelect(event);
 
     return YES;
+}
+
+//사용자가 지도 위를 터치한 경우 호출된다
+- (void)mapView:(MTMapView*)mapView singleTapOnMapPoint:(MTMapPoint*)mapPoint {
+  id event = @{
+                 @"action": @"onMapTouch",
+                 @"coordinate": @{
+                         @"latitude": @(mapPoint.mapPointGeo.latitude),
+                         @"longitude": @(mapPoint.mapPointGeo.longitude)
+                         }
+                 };
+    if (_mapView.onMapTouch) _mapView.onMapTouch(event);
 }
 
 @end

@@ -29,5 +29,6 @@
 
 @property (nonatomic, copy) RCTDirectEventBlock onMapDragEnded;
 @property (nonatomic, copy) RCTDirectEventBlock onMarkerSelect;
+@property (nonatomic, copy) RCTDirectEventBlock onMapTouch;
 
 @end
