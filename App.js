@@ -18,6 +18,8 @@ import {
 import MapView from './kakaomap'
 import Geolocation from 'react-native-geolocation-service'
 import { check, request, openSettings, PERMISSIONS, RESULTS } from 'react-native-permissions'
+import Animated from 'react-native-reanimated'
+import BottomSheet from 'reanimated-bottom-sheet'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -38,6 +40,9 @@ const APP = () => {
   const isTracking = useRef(false)
   const [searchText, setSearchText] = useState('')
   const [isSearch, setIsSearch] = useState(false)
+  const [markerDatas, setMarkerDatas] = useState([])
+
+  const sheetRef = useRef(null)
 
   useEffect(() => {
     AppState.addEventListener('change', handleAppStateChange)
@@ -190,11 +195,18 @@ const APP = () => {
 
   const _onMarkerSelect = event => {
     console.log(event)
+    Keyboard.dismiss()
     setIsSearch(false)
+    const current = {
+      latitude: event.coordinate.latitude,
+      longitude: event.coordinate.longitude,
+    }
+    setLocation(current)
   }
 
   const _onMapTouch = event => {
     console.log(event)
+    Keyboard.dismiss()
     setIsSearch(false)
   }
 
@@ -212,7 +224,6 @@ const APP = () => {
     } else {
       setIsSearch(false)
     }
-    console.log(place)
   }
 
   const getAddressByKeyword = async keyword => {
@@ -224,7 +235,7 @@ const APP = () => {
       },
     }
     return await fetch(
-      'https://dapi.kakao.com/v2/local/search/keyword.json?page=1&size=5&sort=accuracy&x=' +
+      'https://dapi.kakao.com/v2/local/search/keyword.json?page=1&size=10&sort=accuracy&x=' +
         myLocation.longitude +
         '&y=' +
         myLocation.latitude +
@@ -248,14 +259,55 @@ const APP = () => {
   }
 
   const _renderItem = ({ item, index }) => {
-    return <Text>{item.place_name}</Text>
+    return (
+      <View style={styles.searchContainer}>
+        <TouchableOpacity style={styles.searchItem} onPress={() => _addMarker(item)}>
+          <Text style={styles.place}>{item.place_name}</Text>
+          <Text style={styles.address}>{item.address_name}</Text>
+        </TouchableOpacity>
+      </View>
+    )
   }
 
-  const markerDatas = [
-    { tag: '1', title: '맛집', latitude: 37.48496, longitude: 127.03427, markerImage: 'marker', markerSelectImage: 'markerSel' },
-    { tag: '2', title: '카페', latitude: 37.48486, longitude: 127.03437, markerImage: 'marker', markerSelectImage: 'markerSel' },
-    { tag: '3', title: '장소', latitude: 37.48476, longitude: 127.03447, markerImage: 'marker', markerSelectImage: 'markerSel' },
-  ]
+  const _addMarker = item => {
+    Keyboard.dismiss()
+    console.log(item)
+    const prevMarkers = [...markerDatas]
+    const placeMarker = {
+      tag: item.id,
+      title: item.place_name,
+      latitude: Number(item.y),
+      longitude: Number(item.x),
+      markerImage: 'marker',
+      markerSelectImage: 'markerSel',
+    }
+    setMarkerDatas(
+      prevMarkers.concat(placeMarker).reduce((result = [], value) => {
+        if (!result.includes(value) && result.filter(item => item['tag'] === value['tag']).length <= 0) {
+          result.push(value)
+        }
+
+        return result
+      }, []),
+    )
+    const current = {
+      latitude: Number(item.y),
+      longitude: Number(item.x),
+    }
+
+    setLocation(current)
+  }
+
+  const _renderContent = () => (
+    <View
+      style={{
+        backgroundColor: 'white',
+        padding: 16,
+        minHeight: '100%',
+      }}>
+      <Text>Swipe down to close</Text>
+    </View>
+  )
 
   return (
     <>
@@ -277,7 +329,6 @@ const APP = () => {
           }}
         />
         <TouchableOpacity
-          testID={'1515'}
           style={styles.currentLocationContainer}
           activeOpacity={0.5}
           onPress={() => {
@@ -309,9 +360,10 @@ const APP = () => {
           </TouchableWithoutFeedback>
         </View>
         <View style={isSearch ? styles.placeListContainer : { display: 'none' }}>
-          <FlatList data={place} renderItem={_renderItem}></FlatList>
+          <FlatList data={place} renderItem={_renderItem} indicatorStyle="black"></FlatList>
         </View>
       </SafeAreaView>
+      <BottomSheet ref={sheetRef} snapPoints={['50%', '30%', 0]} borderRadius={10} renderContent={_renderContent} />
     </>
   )
 }
@@ -338,9 +390,9 @@ const styles = StyleSheet.create({
     marginTop: 60,
     minHeight: 40,
     backgroundColor: 'white',
-    borderWidth: 0.1,
-    borderRadius: 20,
-    borderColor: '#00000010',
+    borderWidth: 1,
+    borderRadius: 5,
+    borderColor: 'gray',
   },
   searchGuideText: {
     flex: 1,
@@ -360,9 +412,31 @@ const styles = StyleSheet.create({
     position: 'absolute',
     flexDirection: 'row',
     marginHorizontal: 18,
-    marginTop: 100,
-    minHeight: 200,
+    marginTop: 102,
+    maxHeight: 200,
     backgroundColor: 'white',
+  },
+  searchContainer: {
+    backgroundColor: 'white',
+    marginHorizontal: 18,
+    marginVertical: 6,
+    flexDirection: 'row',
+    borderBottomWidth: 0.2,
+    borderColor: 'gray',
+    paddingBottom: 5,
+  },
+  searchItem: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  place: {
+    color: 'black',
+    marginBottom: 3,
+  },
+  address: {
+    fontSize: 12,
+    color: 'gray',
   },
 })
 
