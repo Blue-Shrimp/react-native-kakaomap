@@ -48,7 +48,7 @@ RCT_CUSTOM_VIEW_PROPERTY(initialRegion, NSDictionary , KakaoMapView) {
 
 RCT_CUSTOM_VIEW_PROPERTY(markers, NSArray , KakaoMapView)
 {
-  NSMutableArray *markerList = [[NSMutableArray alloc] init];
+  [_mapView removeAllPOIItems];
   
   for (int i = 0; i < [json count]; i++) {
     NSDictionary *dictionary = [json objectAtIndex:i];
@@ -62,6 +62,7 @@ RCT_CUSTOM_VIEW_PROPERTY(markers, NSArray , KakaoMapView)
     
     marker.tag = [[dictionary valueForKey:@"tag"] integerValue];
     marker.itemName = dictionary[@"title"];
+    marker.userObject = dictionary[@"info"];
     marker.mapPoint = [MTMapPoint mapPointWithGeoCoord:MTMapPointGeoMake(latdouble, londouble)];
     marker.markerType = MTMapPOIItemMarkerTypeCustomImage;
     marker.markerSelectedType = MTMapPOIItemMarkerSelectedTypeCustomImage;
@@ -69,10 +70,11 @@ RCT_CUSTOM_VIEW_PROPERTY(markers, NSArray , KakaoMapView)
     marker.customSelectedImageName = selectImageName;
     marker.showDisclosureButtonOnCalloutBalloon = NO;
     
-    [markerList addObject:marker];
+    [_mapView addPOIItem: marker];
+    if([[dictionary valueForKey:@"search"] boolValue]) {
+      [_mapView selectPOIItem:marker animated:NO];
+    }
   }
-  
-  [_mapView addPOIItems: markerList];
 }
 
 RCT_CUSTOM_VIEW_PROPERTY(isTracking, NSBool , KakaoMapView)
@@ -103,6 +105,8 @@ RCT_CUSTOM_VIEW_PROPERTY(isTracking, NSBool , KakaoMapView)
     id event = @{
                  @"action": @"markerSelect",
                  @"tag": @(poiItem.tag),
+                 @"title": poiItem.itemName,
+                 @"info": poiItem.userObject,
                  @"coordinate": @{
                          @"latitude": @(poiItem.mapPoint.mapPointGeo.latitude),
                          @"longitude": @(poiItem.mapPoint.mapPointGeo.longitude)

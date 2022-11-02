@@ -41,6 +41,7 @@ const APP = () => {
   const [searchText, setSearchText] = useState('')
   const [isSearch, setIsSearch] = useState(false)
   const [markerDatas, setMarkerDatas] = useState([])
+  const [searchPlace, setSearchPlace] = useState({})
 
   const sheetRef = useRef(null)
 
@@ -184,7 +185,6 @@ const APP = () => {
   }
 
   const _onMapDragEnded = event => {
-    console.log(event)
     const { latitude, longitude } = event.coordinate
     const current = {
       latitude: latitude,
@@ -194,20 +194,24 @@ const APP = () => {
   }
 
   const _onMarkerSelect = event => {
-    console.log(event)
     Keyboard.dismiss()
     setIsSearch(false)
     const current = {
       latitude: event.coordinate.latitude,
       longitude: event.coordinate.longitude,
     }
+    const selectMarker = markerDatas.find(v => v.tag === event.tag.toString())
+    const placeData = { id: selectMarker.tag, place_name: selectMarker.title, address_name: selectMarker.info.address, isSave: selectMarker.save }
     setLocation(current)
+    setSearchPlace(placeData)
+    sheetRef.current.snapTo(1)
   }
 
   const _onMapTouch = event => {
-    console.log(event)
     Keyboard.dismiss()
     setIsSearch(false)
+    sheetRef.current.snapTo(2)
+    setMarkerDatas(markerDatas.filter(v => v.save === true))
   }
 
   const _onChangeText = text => {
@@ -216,6 +220,7 @@ const APP = () => {
 
   const _onSearch = async () => {
     Keyboard.dismiss()
+    sheetRef.current.snapTo(2)
 
     const placeList = await getAddressByKeyword(searchText)
     setPlace(placeList)
@@ -270,16 +275,20 @@ const APP = () => {
   }
 
   const _addMarker = item => {
+    setIsSearch(false)
     Keyboard.dismiss()
-    console.log(item)
+    setSearchPlace(item)
     const prevMarkers = [...markerDatas]
     const placeMarker = {
       tag: item.id,
       title: item.place_name,
+      info: { address: item.address_name },
       latitude: Number(item.y),
       longitude: Number(item.x),
       markerImage: 'marker',
       markerSelectImage: 'markerSel',
+      search: true,
+      save: false,
     }
     setMarkerDatas(
       prevMarkers.concat(placeMarker).reduce((result = [], value) => {
@@ -296,18 +305,60 @@ const APP = () => {
     }
 
     setLocation(current)
+    if (prevMarkers.length !== markerDatas.length) {
+      sheetRef.current.snapTo(1)
+    }
   }
 
-  const _renderContent = () => (
-    <View
-      style={{
-        backgroundColor: 'white',
-        padding: 16,
-        minHeight: '100%',
-      }}>
-      <Text>Swipe down to close</Text>
-    </View>
-  )
+  const _renderContent = () => {
+    return (
+      <View
+        style={{
+          backgroundColor: 'white',
+          padding: 16,
+          minHeight: '100%',
+        }}>
+        <Text>{searchPlace?.place_name}</Text>
+        <Text>{searchPlace?.address_name}</Text>
+        <TouchableOpacity
+          onPress={() => {
+            setMarkerDatas(
+              markerDatas.reduce((result = [], value) => {
+                result.push({
+                  ...value,
+                  search: false,
+                  save: true,
+                })
+
+                return result
+              }, []),
+            )
+            sheetRef.current.snapTo(2)
+          }}
+          style={searchPlace?.isSave ? { display: 'none' } : { display: 'flex' }}>
+          <Text>저장</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            setMarkerDatas(
+              markerDatas
+                .filter(v => v.tag !== searchPlace.id)
+                .reduce((result = [], value) => {
+                  result.push({
+                    ...value,
+                    search: false,
+                  })
+
+                  return result
+                }, []),
+            )
+            sheetRef.current.snapTo(2)
+          }}>
+          <Text>삭제</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
 
   return (
     <>
@@ -352,6 +403,9 @@ const APP = () => {
             keyboardAppearance={'default'}
             onSubmitEditing={_onSearch}
             value={searchText}
+            onFocus={() => {
+              sheetRef.current.snapTo(2)
+            }}
           />
           <TouchableWithoutFeedback onPress={_onSearch}>
             <View style={styles.searchButtonContainer}>
@@ -363,7 +417,7 @@ const APP = () => {
           <FlatList data={place} renderItem={_renderItem} indicatorStyle="black"></FlatList>
         </View>
       </SafeAreaView>
-      <BottomSheet ref={sheetRef} snapPoints={['50%', '30%', 0]} borderRadius={10} renderContent={_renderContent} />
+      <BottomSheet ref={sheetRef} snapPoints={['50%', '30%', 0]} initialSnap={2} borderRadius={10} renderContent={_renderContent} />
     </>
   )
 }
