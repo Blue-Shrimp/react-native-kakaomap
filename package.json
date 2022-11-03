@@ -16,11 +16,13 @@
     "clean-all": "yarn delete-resource && yarn clean-cache && yarn reinstall && yarn clean-android && yarn clean-ios && yarn start --reset-cache"
   },
   "dependencies": {
+    "@davidgovea/react-native-wheel-datepicker": "^1.0.2",
     "react": "17.0.1",
     "react-native": "0.64.2",
     "react-native-config": "^1.4.6",
     "react-native-geolocation-service": "^5.3.1",
     "react-native-gesture-handler": "^1.10.3",
+    "react-native-modal": "^13.0.1",
     "react-native-permissions": "^3.6.1",
     "react-native-preference": "^2.2.3",
     "react-native-reanimated": "1.13.1",

@@ -21,6 +21,8 @@ import { check, request, openSettings, PERMISSIONS, RESULTS } from 'react-native
 import Animated from 'react-native-reanimated'
 import BottomSheet from 'reanimated-bottom-sheet'
 import Preference from 'react-native-preference'
+import { DatePicker } from '@davidgovea/react-native-wheel-datepicker'
+import Modal from 'react-native-modal'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -44,6 +46,9 @@ const APP = () => {
   const [markerDatas, setMarkerDatas] = useState([])
   const [searchPlace, setSearchPlace] = useState({})
   const [titleText, setTitleText] = useState('')
+  const [isModalVisible, setModalVisible] = useState(false)
+  const [pickerDate, setPickerDate] = useState(new Date().toISOString().substring(0, 10))
+  const [markerDate, setMarkerDate] = useState(new Date().toISOString().substring(0, 10))
 
   const sheetRef = useRef(null)
 
@@ -204,9 +209,17 @@ const APP = () => {
       longitude: event.coordinate.longitude,
     }
     const selectMarker = markerDatas.find(v => v.tag === event.tag.toString())
-    const placeData = { id: selectMarker.tag, place_name: selectMarker.title, address_name: selectMarker.info.address, isSave: selectMarker.save }
+    const placeData = {
+      id: selectMarker.tag,
+      place_name: selectMarker.title,
+      address_name: selectMarker.info.address,
+      isSave: selectMarker.save,
+      time: selectMarker.time,
+    }
     setLocation(current)
     setSearchPlace(placeData)
+    setMarkerDate(selectMarker.time)
+    setPickerDate(selectMarker.time)
     setTitleText(selectMarker.title)
     sheetRef.current.snapTo(1)
   }
@@ -311,6 +324,7 @@ const APP = () => {
       markerSelectImage: 'markerSel',
       search: true,
       save: false,
+      time: new Date().toISOString().substring(0, 10),
     }
     setMarkerDatas(
       prevMarkers.concat(placeMarker).reduce((result = [], value) => {
@@ -340,6 +354,7 @@ const APP = () => {
           title: titleText,
           search: false,
           save: true,
+          time: markerDate,
         })
         Preference.set('markerData', result)
         return result
@@ -350,7 +365,7 @@ const APP = () => {
 
   const markerModify = () => {
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText }
+    marker = { ...marker, title: titleText, time: markerDate }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     Preference.set('markerData', [...others, marker])
@@ -394,6 +409,12 @@ const APP = () => {
           value={titleText}
         />
         <Text>{searchPlace?.address_name}</Text>
+        <TouchableOpacity
+          onPress={() => {
+            setModalVisible(true)
+          }}>
+          <Text>{markerDate}</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
             searchPlace?.isSave ? markerModify() : markerSave()
@@ -466,6 +487,40 @@ const APP = () => {
         <View style={isSearch ? styles.placeListContainer : { display: 'none' }}>
           <FlatList data={place} renderItem={_renderItem} indicatorStyle="black"></FlatList>
         </View>
+        <Modal
+          isVisible={isModalVisible}
+          style={{ flex: 1, justifyContent: 'center' }}
+          useNativeDriver={true}
+          onBackdropPress={() => {
+            setModalVisible(false)
+            setPickerDate(markerDate)
+          }}>
+          <DatePicker
+            style={{ width: '100%', backgroundColor: 'gray' }}
+            date={new Date(pickerDate)}
+            mode="date"
+            use12Hours
+            onDateChange={date => {
+              setPickerDate(date.toISOString().substring(0, 10))
+            }}
+          />
+          <View style={{ width: '100%', backgroundColor: 'gray', flexDirection: 'row', justifyContent: 'flex-end' }}>
+            <TouchableOpacity
+              onPress={() => {
+                setModalVisible(false)
+                setPickerDate(markerDate)
+              }}>
+              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginRight: 10, marginBottom: 5 }}>취소</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setModalVisible(false)
+                setMarkerDate(pickerDate)
+              }}>
+              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginRight: 10, marginBottom: 5 }}>확인</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
       </SafeAreaView>
       <BottomSheet ref={sheetRef} snapPoints={['50%', '30%', 0]} initialSnap={2} borderRadius={10} renderContent={_renderContent} />
     </>
