@@ -20,6 +20,7 @@ import Geolocation from 'react-native-geolocation-service'
 import { check, request, openSettings, PERMISSIONS, RESULTS } from 'react-native-permissions'
 import Animated from 'react-native-reanimated'
 import BottomSheet from 'reanimated-bottom-sheet'
+import Preference from 'react-native-preference'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -42,12 +43,14 @@ const APP = () => {
   const [isSearch, setIsSearch] = useState(false)
   const [markerDatas, setMarkerDatas] = useState([])
   const [searchPlace, setSearchPlace] = useState({})
+  const [titleText, setTitleText] = useState('')
 
   const sheetRef = useRef(null)
 
   useEffect(() => {
     AppState.addEventListener('change', handleAppStateChange)
     _requestPermission()
+    setMarkerDatas(Preference.get('markerData') || [])
     return () => {
       AppState.removeEventListener('change', handleAppStateChange)
     }
@@ -204,6 +207,7 @@ const APP = () => {
     const placeData = { id: selectMarker.tag, place_name: selectMarker.title, address_name: selectMarker.info.address, isSave: selectMarker.save }
     setLocation(current)
     setSearchPlace(placeData)
+    setTitleText(selectMarker.title)
     sheetRef.current.snapTo(1)
   }
 
@@ -214,13 +218,31 @@ const APP = () => {
     setMarkerDatas(markerDatas.filter(v => v.save === true))
   }
 
-  const _onChangeText = text => {
+  const _onChangeText = async text => {
     setSearchText(text)
+    if (text === '') {
+      return
+    }
+    const placeList = await getAddressByKeyword(text)
+    setPlace(placeList)
+    if (placeList?.length > 0) {
+      setIsSearch(true)
+    } else {
+      setIsSearch(false)
+    }
+  }
+
+  const _onChangeTitle = text => {
+    setTitleText(text)
   }
 
   const _onSearch = async () => {
     Keyboard.dismiss()
     sheetRef.current.snapTo(2)
+
+    if (text === '') {
+      return
+    }
 
     const placeList = await getAddressByKeyword(searchText)
     setPlace(placeList)
@@ -310,6 +332,48 @@ const APP = () => {
     }
   }
 
+  const markerSave = () => {
+    setMarkerDatas(
+      markerDatas.reduce((result = [], value) => {
+        result.push({
+          ...value,
+          title: titleText,
+          search: false,
+          save: true,
+        })
+        Preference.set('markerData', result)
+        return result
+      }, []),
+    )
+    sheetRef.current.snapTo(2)
+  }
+
+  const markerModify = () => {
+    let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
+    marker = { ...marker, title: titleText }
+    let others = markerDatas.filter(v => v.tag !== searchPlace.id)
+    setMarkerDatas([...others, marker])
+    Preference.set('markerData', [...others, marker])
+    sheetRef.current.snapTo(2)
+  }
+
+  const markerDelete = () => {
+    setMarkerDatas(
+      markerDatas
+        .filter(v => v.tag !== searchPlace.id)
+        .reduce((result = [], value) => {
+          result.push({
+            ...value,
+            search: false,
+          })
+
+          Preference.set('markerData', result)
+          return result
+        }, []),
+    )
+    sheetRef.current.snapTo(2)
+  }
+
   const _renderContent = () => {
     return (
       <View
@@ -318,41 +382,27 @@ const APP = () => {
           padding: 16,
           minHeight: '100%',
         }}>
-        <Text>{searchPlace?.place_name}</Text>
+        <TextInput
+          style={{ borderBottomWidth: 1 }}
+          onChangeText={_onChangeTitle}
+          autoCapitalize={'none'}
+          autoCorrect={false}
+          textAlignVertical={'center'}
+          underlineColorAndroid={'transparent'}
+          keyboardType={'default'}
+          keyboardAppearance={'default'}
+          value={titleText}
+        />
         <Text>{searchPlace?.address_name}</Text>
         <TouchableOpacity
           onPress={() => {
-            setMarkerDatas(
-              markerDatas.reduce((result = [], value) => {
-                result.push({
-                  ...value,
-                  search: false,
-                  save: true,
-                })
-
-                return result
-              }, []),
-            )
-            sheetRef.current.snapTo(2)
-          }}
-          style={searchPlace?.isSave ? { display: 'none' } : { display: 'flex' }}>
-          <Text>저장</Text>
+            searchPlace?.isSave ? markerModify() : markerSave()
+          }}>
+          <Text>{searchPlace?.isSave ? '수정' : '저장'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
-            setMarkerDatas(
-              markerDatas
-                .filter(v => v.tag !== searchPlace.id)
-                .reduce((result = [], value) => {
-                  result.push({
-                    ...value,
-                    search: false,
-                  })
-
-                  return result
-                }, []),
-            )
-            sheetRef.current.snapTo(2)
+            markerDelete()
           }}>
           <Text>삭제</Text>
         </TouchableOpacity>

@@ -14,6 +14,8 @@ target 'rnKakaoMap' do
 
   permissions_path = '../node_modules/react-native-permissions/ios'
 
+  pod 'react-native-preference', :path => '../node_modules/react-native-preference'
+
   pod 'Permission-LocationAccuracy', :path => "#{permissions_path}/LocationAccuracy"
 
   pod 'Permission-LocationAlways', :path => "#{permissions_path}/LocationAlways"

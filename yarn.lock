@@ -5381,6 +5381,11 @@ react-native-permissions@^3.6.1:
   resolved "https://registry.yarnpkg.com/react-native-permissions/-/react-native-permissions-3.6.1.tgz#73adcc1cef8cd57a9ef167b4507405f4ff5749c4"
   integrity sha512-fzPpPQXeD34inUccqtoResSwYubfrwUguP4qrVUUv8+KSMjYSaHGoS5HaIJLZHlN9gO+TvLJZ2L5ZljTsb6qnQ==
 
+react-native-preference@^2.2.3:
+  version "2.2.3"
+  resolved "https://registry.yarnpkg.com/react-native-preference/-/react-native-preference-2.2.3.tgz#290f6afa0e311381333077c1cc74f7ca31897f29"
+  integrity sha512-hQgBhKJtzzMn/XeW+bAqEgKaY9kjg+n6ykAcHnGQuQwUdaOiARo66k9kHLPbZNSHmXJYie3YmmFT7y6+R+mk6Q==
+
 react-native-reanimated@1.13.1:
   version "1.13.1"
   resolved "https://registry.yarnpkg.com/react-native-reanimated/-/react-native-reanimated-1.13.1.tgz#c370c32cc4d447ae896cb029bb9c6a2f7608c5b4"
