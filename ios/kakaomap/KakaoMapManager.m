@@ -69,6 +69,7 @@ RCT_CUSTOM_VIEW_PROPERTY(markers, NSArray , KakaoMapView)
     marker.customImageName = imageName;
     marker.customSelectedImageName = selectImageName;
     marker.showDisclosureButtonOnCalloutBalloon = NO;
+    marker.customImageAnchorPointOffset = MTMapImageOffsetMake(54,2);
     
     [_mapView addPOIItem: marker];
     if([[dictionary valueForKey:@"search"] boolValue]) {

@@ -14,6 +14,7 @@ import {
   Keyboard,
   FlatList,
   Text,
+  ScrollView,
 } from 'react-native'
 import MapView from './kakaomap'
 import Geolocation from 'react-native-geolocation-service'
@@ -23,6 +24,7 @@ import BottomSheet from 'reanimated-bottom-sheet'
 import Preference from 'react-native-preference'
 import { DatePicker } from '@davidgovea/react-native-wheel-datepicker'
 import Modal from 'react-native-modal'
+import 'react-native-gesture-handler'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -49,6 +51,7 @@ const APP = () => {
   const [isModalVisible, setModalVisible] = useState(false)
   const [pickerDate, setPickerDate] = useState(new Date().toISOString().substring(0, 10))
   const [markerDate, setMarkerDate] = useState(new Date().toISOString().substring(0, 10))
+  const [detailText, setDetailText] = useState('')
 
   const sheetRef = useRef(null)
 
@@ -215,12 +218,14 @@ const APP = () => {
       address_name: selectMarker.info.address,
       isSave: selectMarker.save,
       time: selectMarker.time,
+      detail: selectMarker.detail,
     }
     setLocation(current)
     setSearchPlace(placeData)
     setMarkerDate(selectMarker.time)
     setPickerDate(selectMarker.time)
     setTitleText(selectMarker.title)
+    setDetailText(selectMarker.detail)
     sheetRef.current.snapTo(1)
   }
 
@@ -249,11 +254,15 @@ const APP = () => {
     setTitleText(text)
   }
 
+  const _onChangeDetail = text => {
+    setDetailText(text)
+  }
+
   const _onSearch = async () => {
     Keyboard.dismiss()
     sheetRef.current.snapTo(2)
 
-    if (text === '') {
+    if (searchText === '') {
       return
     }
 
@@ -325,6 +334,7 @@ const APP = () => {
       search: true,
       save: false,
       time: new Date().toISOString().substring(0, 10),
+      detail: '',
     }
     setMarkerDatas(
       prevMarkers.concat(placeMarker).reduce((result = [], value) => {
@@ -347,25 +357,17 @@ const APP = () => {
   }
 
   const markerSave = () => {
-    setMarkerDatas(
-      markerDatas.reduce((result = [], value) => {
-        result.push({
-          ...value,
-          title: titleText,
-          search: false,
-          save: true,
-          time: markerDate,
-        })
-        Preference.set('markerData', result)
-        return result
-      }, []),
-    )
+    let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
+    marker = { ...marker, title: titleText, search: false, save: true, time: markerDate, detail: detailText }
+    let others = markerDatas.filter(v => v.tag !== searchPlace.id)
+    setMarkerDatas([...others, marker])
+    Preference.set('markerData', [...others, marker])
     sheetRef.current.snapTo(2)
   }
 
   const markerModify = () => {
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText, time: markerDate }
+    marker = { ...marker, title: titleText, time: markerDate, detail: detailText }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     Preference.set('markerData', [...others, marker])
@@ -389,45 +391,95 @@ const APP = () => {
     sheetRef.current.snapTo(2)
   }
 
+  const _renderHeader = () => {
+    return (
+      <View style={styles.header}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHandle} />
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16 }}>
+          <TouchableOpacity
+            onPress={() => {
+              searchPlace?.isSave ? markerModify() : markerSave()
+              Keyboard.dismiss()
+            }}
+            style={{ borderBottomWidth: 0.3, paddingBottom: 5, marginRight: 5 }}>
+            <Text style={{ fontSize: 16 }}>{searchPlace?.isSave ? '수정' : '저장'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              markerDelete()
+              Keyboard.dismiss()
+            }}
+            style={{ borderBottomWidth: 0.3, paddingBottom: 5 }}>
+            <Text style={{ fontSize: 16 }}>삭제</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
+  }
+
   const _renderContent = () => {
     return (
-      <View
+      <ScrollView
         style={{
           backgroundColor: 'white',
           padding: 16,
           minHeight: '100%',
         }}>
         <TextInput
-          style={{ borderBottomWidth: 1 }}
+          style={{ borderBottomWidth: 0.3, alignSelf: 'center', width: '100%', fontSize: 22, paddingBottom: 8, fontWeight: 'bold' }}
           onChangeText={_onChangeTitle}
           autoCapitalize={'none'}
           autoCorrect={false}
           textAlignVertical={'center'}
+          textAlign={'center'}
           underlineColorAndroid={'transparent'}
           keyboardType={'default'}
           keyboardAppearance={'default'}
           value={titleText}
+          onFocus={() => sheetRef.current.snapTo(0)}
         />
-        <Text>{searchPlace?.address_name}</Text>
-        <TouchableOpacity
-          onPress={() => {
-            setModalVisible(true)
-          }}>
-          <Text>{markerDate}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            searchPlace?.isSave ? markerModify() : markerSave()
-          }}>
-          <Text>{searchPlace?.isSave ? '수정' : '저장'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            markerDelete()
-          }}>
-          <Text>삭제</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={{ flexDirection: 'row', marginTop: 10, justifyContent: 'space-between' }}>
+          <Text>장소</Text>
+          <View style={{ flexDirection: 'row' }}>
+            <Image
+              style={{
+                width: 12,
+                height: 12,
+                alignSelf: 'center',
+                marginRight: 3,
+              }}
+              source={require('./images/marker.png')}
+            />
+            <Text style={{ textAlign: 'center' }}>{searchPlace?.address_name}</Text>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', marginTop: 10, justifyContent: 'space-between' }}>
+          <Text>방문일자</Text>
+          <TouchableOpacity
+            onPress={() => {
+              setModalVisible(true)
+            }}
+            style={{ borderBottomWidth: 0.3, alignSelf: 'center', paddingBottom: 5 }}>
+            <Text>{markerDate}</Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={{ borderWidth: 0.5, borderColor: 'gray', marginTop: 15, minHeight: 140, color: 'black', paddingVertical: 5, paddingHorizontal: 5 }}
+          onFocus={() => sheetRef.current.snapTo(0)}
+          multiline={true}
+          placeholder={'추억을 기록해보세요.'}
+          placeholderTextColor={'black'}
+          onChangeText={_onChangeDetail}
+          value={detailText}
+          autoCapitalize={'none'}
+          autoCorrect={false}
+          keyboardType={'default'}
+          keyboardAppearance={'default'}
+          textAlignVertical={'center'}
+        />
+      </ScrollView>
     )
   }
 
@@ -500,11 +552,21 @@ const APP = () => {
             date={new Date(pickerDate)}
             mode="date"
             use12Hours
+            maximumDate={new Date()}
             onDateChange={date => {
               setPickerDate(date.toISOString().substring(0, 10))
             }}
           />
-          <View style={{ width: '100%', backgroundColor: 'gray', flexDirection: 'row', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              width: '100%',
+              backgroundColor: 'gray',
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              borderTopWidth: 0.5,
+              borderTopColor: 'white',
+              paddingTop: 10,
+            }}>
             <TouchableOpacity
               onPress={() => {
                 setModalVisible(false)
@@ -522,7 +584,7 @@ const APP = () => {
           </View>
         </Modal>
       </SafeAreaView>
-      <BottomSheet ref={sheetRef} snapPoints={['50%', '30%', 0]} initialSnap={2} borderRadius={10} renderContent={_renderContent} />
+      <BottomSheet ref={sheetRef} snapPoints={['70%', '40%', 0]} initialSnap={2} renderHeader={_renderHeader} renderContent={_renderContent} />
     </>
   )
 }
@@ -596,6 +658,22 @@ const styles = StyleSheet.create({
   address: {
     fontSize: 12,
     color: 'gray',
+  },
+  header: {
+    backgroundColor: 'white',
+    paddingTop: 10,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  panelHeader: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  panelHandle: {
+    width: 57,
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: 'gray',
   },
 })
 
