@@ -25,6 +25,8 @@ import Preference from 'react-native-preference'
 import { DatePicker } from '@davidgovea/react-native-wheel-datepicker'
 import Modal from 'react-native-modal'
 import 'react-native-gesture-handler'
+import { launchImageLibrary } from 'react-native-image-picker'
+import storage from '@react-native-firebase/storage'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -52,6 +54,8 @@ const APP = () => {
   const [pickerDate, setPickerDate] = useState(new Date().toISOString().substring(0, 10))
   const [markerDate, setMarkerDate] = useState(new Date().toISOString().substring(0, 10))
   const [detailText, setDetailText] = useState('')
+  const [imgResponse, setImgResponse] = useState(null)
+  const [imgUrl, setImgUrl] = useState('')
 
   const sheetRef = useRef(null)
 
@@ -219,6 +223,7 @@ const APP = () => {
       isSave: selectMarker.save,
       time: selectMarker.time,
       detail: selectMarker.detail,
+      imgUrl: selectMarker.imgUrl,
     }
     setLocation(current)
     setSearchPlace(placeData)
@@ -226,12 +231,15 @@ const APP = () => {
     setPickerDate(selectMarker.time)
     setTitleText(selectMarker.title)
     setDetailText(selectMarker.detail)
+    setImgUrl(selectMarker.imgUrl)
     sheetRef.current.snapTo(1)
   }
 
   const _onMapTouch = event => {
     Keyboard.dismiss()
     setIsSearch(false)
+    setImgResponse(null)
+    setImgUrl('')
     sheetRef.current.snapTo(2)
     setMarkerDatas(markerDatas.filter(v => v.save === true))
   }
@@ -260,6 +268,8 @@ const APP = () => {
 
   const _onSearch = async () => {
     Keyboard.dismiss()
+    setImgResponse(null)
+    setImgUrl('')
     sheetRef.current.snapTo(2)
 
     if (searchText === '') {
@@ -335,6 +345,7 @@ const APP = () => {
       save: false,
       time: new Date().toISOString().substring(0, 10),
       detail: '',
+      imgUrl: '',
     }
     setMarkerDatas(
       prevMarkers.concat(placeMarker).reduce((result = [], value) => {
@@ -356,21 +367,41 @@ const APP = () => {
     }
   }
 
-  const markerSave = () => {
+  const markerSave = async () => {
+    let imageUrl = ''
+    if (imgResponse !== null) {
+      const asset = imgResponse?.assets[0]
+      const reference = storage().ref(`/image/${asset.fileName}`) // 업로드할 경로 지정
+      await reference.putFile(asset.uri)
+      imageUrl = await reference.getDownloadURL()
+      console.log('imageUrl', imageUrl)
+    }
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText, search: false, save: true, time: markerDate, detail: detailText }
+    marker = { ...marker, title: titleText, search: false, save: true, time: markerDate, detail: detailText, imgUrl: imageUrl }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     Preference.set('markerData', [...others, marker])
+    setImgResponse(null)
+    setImgUrl('')
     sheetRef.current.snapTo(2)
   }
 
-  const markerModify = () => {
+  const markerModify = async () => {
+    let imageUrl = ''
+    if (imgResponse !== null) {
+      const asset = imgResponse?.assets[0]
+      const reference = storage().ref(`/image/${asset.fileName}`) // 업로드할 경로 지정
+      await reference.putFile(asset.uri)
+      imageUrl = await reference.getDownloadURL()
+      console.log('imageUrl', imageUrl)
+    }
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText, time: markerDate, detail: detailText }
+    marker = { ...marker, title: titleText, time: markerDate, detail: detailText, imgUrl: imageUrl }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     Preference.set('markerData', [...others, marker])
+    setImgResponse(null)
+    setImgUrl('')
     sheetRef.current.snapTo(2)
   }
 
@@ -388,7 +419,44 @@ const APP = () => {
           return result
         }, []),
     )
+    setImgResponse(null)
+    setImgUrl('')
     sheetRef.current.snapTo(2)
+  }
+
+  const _imageView = () => {
+    console.log('imgResponse : ', imgResponse)
+    console.log('imgUrl : ', imgUrl)
+    if (imgResponse === null && imgUrl === '') {
+      return (
+        <View style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' }}>
+          <Text style={{ alignSelf: 'center', color: 'gray', fontSize: 30 }}>+</Text>
+        </View>
+      )
+    } else {
+      if (imgResponse === null) {
+        return <Image style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125 }} source={{ uri: imgUrl }} />
+      } else {
+        return (
+          <Image
+            style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125 }}
+            source={{ uri: imgResponse?.assets[0]?.uri }}
+          />
+        )
+      }
+    }
+  }
+
+  const _onSelectImage = async () => {
+    const options = {
+      mediaType: 'photo',
+      maxWidth: 512,
+      maxHeight: 512,
+    }
+    const result = await launchImageLibrary(options)
+    console.log(result)
+    if (result?.didCancel) return
+    setImgResponse(result)
   }
 
   const _renderHeader = () => {
@@ -466,7 +534,7 @@ const APP = () => {
           </TouchableOpacity>
         </View>
         <TextInput
-          style={{ borderWidth: 0.5, borderColor: 'gray', marginTop: 15, minHeight: 140, color: 'black', paddingVertical: 5, paddingHorizontal: 5 }}
+          style={{ borderWidth: 0.5, borderColor: 'gray', marginTop: 15, minHeight: 95, color: 'black', paddingVertical: 5, paddingHorizontal: 5 }}
           onFocus={() => sheetRef.current.snapTo(0)}
           multiline={true}
           placeholder={'추억을 기록해보세요.'}
@@ -479,6 +547,7 @@ const APP = () => {
           keyboardAppearance={'default'}
           textAlignVertical={'center'}
         />
+        <TouchableOpacity onPress={() => _onSelectImage()}>{_imageView()}</TouchableOpacity>
       </ScrollView>
     )
   }
@@ -527,6 +596,8 @@ const APP = () => {
             onSubmitEditing={_onSearch}
             value={searchText}
             onFocus={() => {
+              setImgResponse(null)
+              setImgUrl('')
               sheetRef.current.snapTo(2)
             }}
           />
@@ -584,7 +655,7 @@ const APP = () => {
           </View>
         </Modal>
       </SafeAreaView>
-      <BottomSheet ref={sheetRef} snapPoints={['70%', '40%', 0]} initialSnap={2} renderHeader={_renderHeader} renderContent={_renderContent} />
+      <BottomSheet ref={sheetRef} snapPoints={['70%', '48%', 0]} initialSnap={2} renderHeader={_renderHeader} renderContent={_renderContent} />
     </>
   )
 }
