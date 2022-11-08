@@ -60,6 +60,7 @@ const APP = () => {
   const [imgResponse, setImgResponse] = useState(null)
   const [imgUrl, setImgUrl] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isImgModal, setIsImgModal] = useState(false)
 
   const sheetRef = useRef(null)
 
@@ -608,7 +609,9 @@ const APP = () => {
           keyboardAppearance={'default'}
           textAlignVertical={'center'}
         />
-        <TouchableOpacity onPress={() => _modalOpen()}>{_imageView()}</TouchableOpacity>
+        <TouchableOpacity onPress={() => (imgResponse === null && imgUrl === '' ? _modalOpen() : setIsImgModal(true))}>
+          {_imageView()}
+        </TouchableOpacity>
         {loading ? _loadingView() : null}
       </ScrollView>
     )
@@ -675,7 +678,7 @@ const APP = () => {
         <Modal
           isVisible={isModalVisible}
           style={{ flex: 1, justifyContent: 'center' }}
-          useNativeDriver={true}
+          backdropTransitionOutTiming={0}
           onBackdropPress={() => {
             setModalVisible(false)
             setPickerDate(markerDate)
@@ -715,6 +718,74 @@ const APP = () => {
               <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginRight: 10, marginBottom: 5 }}>확인</Text>
             </TouchableOpacity>
           </View>
+        </Modal>
+        <Modal
+          isVisible={isImgModal}
+          style={{ flex: 1, backgroundColor: 'black', paddingTop: 30 }}
+          backdropTransitionOutTiming={0}
+          onBackdropPress={() => {
+            setIsImgModal(false)
+          }}>
+          <View style={{ flexDirection: 'row', marginHorizontal: 10, justifyContent: 'space-between' }}>
+            <TouchableOpacity>
+              <Text
+                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                onPress={() => {
+                  setIsImgModal(false)
+                }}>
+                X
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <Text
+                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                onPress={() => {
+                  ActionSheetIOS.showActionSheetWithOptions(
+                    {
+                      options: ['수정하기', '삭제하기', '취소'],
+                      cancelButtonIndex: 2,
+                    },
+                    buttonIndex => {
+                      if (buttonIndex === 0) {
+                        setIsImgModal(false)
+                        setTimeout(() => {
+                          _modalOpen()
+                        }, 500)
+                      } else if (buttonIndex === 1) {
+                        setImgUrl('')
+                        setImgResponse(null)
+                        setIsImgModal(false)
+                      }
+                    },
+                  )
+                }}>
+                ...
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            {imgResponse === null && imgUrl === '' ? null : (
+              <Image
+                style={{ width: '100%', height: '100%' }}
+                resizeMode={'contain'}
+                source={{ uri: imgResponse === null ? imgUrl : imgResponse?.assets[0]?.uri }}
+                onLoadStart={() => setLoading(true)}
+                onLoadEnd={() => setLoading(false)}
+              />
+            )}
+          </View>
+          {loading ? (
+            <View
+              style={{
+                backgroundColor: 'black',
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                justifyContent: 'center',
+              }}>
+              <ActivityIndicator size={'large'} color="red" />
+            </View>
+          ) : null}
         </Modal>
       </SafeAreaView>
       {loading ? (
