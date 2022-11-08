@@ -15,6 +15,9 @@ import {
   FlatList,
   Text,
   ScrollView,
+  ActionSheetIOS,
+  ActivityIndicator,
+  Dimensions,
 } from 'react-native'
 import MapView from './kakaomap'
 import Geolocation from 'react-native-geolocation-service'
@@ -25,7 +28,7 @@ import Preference from 'react-native-preference'
 import { DatePicker } from '@davidgovea/react-native-wheel-datepicker'
 import Modal from 'react-native-modal'
 import 'react-native-gesture-handler'
-import { launchImageLibrary } from 'react-native-image-picker'
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
 import storage from '@react-native-firebase/storage'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
@@ -56,6 +59,7 @@ const APP = () => {
   const [detailText, setDetailText] = useState('')
   const [imgResponse, setImgResponse] = useState(null)
   const [imgUrl, setImgUrl] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const sheetRef = useRef(null)
 
@@ -368,6 +372,7 @@ const APP = () => {
   }
 
   const markerSave = async () => {
+    setLoading(true)
     let imageUrl = ''
     if (imgResponse !== null) {
       const asset = imgResponse?.assets[0]
@@ -384,9 +389,11 @@ const APP = () => {
     setImgResponse(null)
     setImgUrl('')
     sheetRef.current.snapTo(2)
+    setLoading(false)
   }
 
   const markerModify = async () => {
+    setLoading(true)
     let imageUrl = ''
     if (imgResponse !== null) {
       const asset = imgResponse?.assets[0]
@@ -394,6 +401,9 @@ const APP = () => {
       await reference.putFile(asset.uri)
       imageUrl = await reference.getDownloadURL()
       console.log('imageUrl', imageUrl)
+    }
+    if (imgResponse === null && imgUrl !== '') {
+      imageUrl = imgUrl
     }
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
     marker = { ...marker, title: titleText, time: markerDate, detail: detailText, imgUrl: imageUrl }
@@ -403,6 +413,7 @@ const APP = () => {
     setImgResponse(null)
     setImgUrl('')
     sheetRef.current.snapTo(2)
+    setLoading(false)
   }
 
   const markerDelete = () => {
@@ -425,8 +436,6 @@ const APP = () => {
   }
 
   const _imageView = () => {
-    console.log('imgResponse : ', imgResponse)
-    console.log('imgUrl : ', imgUrl)
     if (imgResponse === null && imgUrl === '') {
       return (
         <View style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' }}>
@@ -435,7 +444,14 @@ const APP = () => {
       )
     } else {
       if (imgResponse === null) {
-        return <Image style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125 }} source={{ uri: imgUrl }} />
+        return (
+          <Image
+            style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125 }}
+            source={{ uri: imgUrl }}
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+          />
+        )
       } else {
         return (
           <Image
@@ -447,7 +463,38 @@ const APP = () => {
     }
   }
 
+  const _modalOpen = () => {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: ['카메라로 촬영하기', '사진 선택하기', '취소'],
+        cancelButtonIndex: 2,
+      },
+      buttonIndex => {
+        if (buttonIndex === 0) {
+          _onSelectCamera()
+        } else if (buttonIndex === 1) {
+          _onSelectImage()
+        }
+      },
+    )
+  }
+
+  const _onSelectCamera = async () => {
+    setLoading(true)
+    const options = {
+      mediaType: 'photo',
+      maxWidth: 512,
+      maxHeight: 512,
+    }
+    const result = await launchCamera(options)
+    console.log(result)
+    setLoading(false)
+    if (result?.assets === undefined) return
+    setImgResponse(result)
+  }
+
   const _onSelectImage = async () => {
+    setLoading(true)
     const options = {
       mediaType: 'photo',
       maxWidth: 512,
@@ -455,12 +502,13 @@ const APP = () => {
     }
     const result = await launchImageLibrary(options)
     console.log(result)
-    if (result?.didCancel) return
+    setLoading(false)
+    if (result?.assets === undefined) return
     setImgResponse(result)
   }
 
   const _renderHeader = () => {
-    return (
+    return loading ? null : (
       <View style={styles.header}>
         <View style={styles.panelHeader}>
           <View style={styles.panelHandle} />
@@ -486,6 +534,19 @@ const APP = () => {
       </View>
     )
   }
+
+  const _loadingView = () => (
+    <View
+      style={{
+        backgroundColor: 'white',
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+      }}>
+      <ActivityIndicator size={'large'} color="red" />
+    </View>
+  )
 
   const _renderContent = () => {
     return (
@@ -547,7 +608,8 @@ const APP = () => {
           keyboardAppearance={'default'}
           textAlignVertical={'center'}
         />
-        <TouchableOpacity onPress={() => _onSelectImage()}>{_imageView()}</TouchableOpacity>
+        <TouchableOpacity onPress={() => _modalOpen()}>{_imageView()}</TouchableOpacity>
+        {loading ? _loadingView() : null}
       </ScrollView>
     )
   }
@@ -655,6 +717,18 @@ const APP = () => {
           </View>
         </Modal>
       </SafeAreaView>
+      {loading ? (
+        <View
+          style={{
+            position: 'absolute',
+            width: Dimensions.get('window').width,
+            height: Dimensions.get('window').height,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'gray',
+            opacity: 0.5,
+          }}></View>
+      ) : null}
       <BottomSheet ref={sheetRef} snapPoints={['70%', '48%', 0]} initialSnap={2} renderHeader={_renderHeader} renderContent={_renderContent} />
     </>
   )
