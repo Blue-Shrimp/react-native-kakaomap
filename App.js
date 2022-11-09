@@ -30,6 +30,7 @@ import Modal from 'react-native-modal'
 import 'react-native-gesture-handler'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
 import storage from '@react-native-firebase/storage'
+import firestore from '@react-native-firebase/firestore'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -62,12 +63,14 @@ const APP = () => {
   const [loading, setLoading] = useState(false)
   const [isImgModal, setIsImgModal] = useState(false)
 
+  const markerCollenction = firestore().collection('users')
+
   const sheetRef = useRef(null)
 
   useEffect(() => {
     AppState.addEventListener('change', handleAppStateChange)
     _requestPermission()
-    setMarkerDatas(Preference.get('markerData') || [])
+    _downloadMarker()
     return () => {
       AppState.removeEventListener('change', handleAppStateChange)
     }
@@ -372,6 +375,27 @@ const APP = () => {
     }
   }
 
+  const _downloadMarker = async () => {
+    setLoading(true)
+    try {
+      const data = await markerCollenction.doc('ABC').get()
+      console.log(data?._data?.markerData)
+      setMarkerDatas(data?._data?.markerData)
+      setLoading(false)
+    } catch (error) {
+      console.log(error.message)
+    }
+  }
+
+  const _uploadMarker = async markers => {
+    try {
+      await markerCollenction.doc('ABC').set({ markerData: markers })
+      console.log('Create Complete!')
+    } catch (error) {
+      console.log(error.message)
+    }
+  }
+
   const markerSave = async () => {
     setLoading(true)
     let imageUrl = ''
@@ -386,7 +410,7 @@ const APP = () => {
     marker = { ...marker, title: titleText, search: false, save: true, time: markerDate, detail: detailText, imgUrl: imageUrl }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
-    Preference.set('markerData', [...others, marker])
+    await _uploadMarker([...others, marker])
     setImgResponse(null)
     setImgUrl('')
     sheetRef.current.snapTo(2)
@@ -410,30 +434,31 @@ const APP = () => {
     marker = { ...marker, title: titleText, time: markerDate, detail: detailText, imgUrl: imageUrl }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
-    Preference.set('markerData', [...others, marker])
+    await _uploadMarker([...others, marker])
     setImgResponse(null)
     setImgUrl('')
     sheetRef.current.snapTo(2)
     setLoading(false)
   }
 
-  const markerDelete = () => {
-    setMarkerDatas(
-      markerDatas
-        .filter(v => v.tag !== searchPlace.id)
-        .reduce((result = [], value) => {
-          result.push({
-            ...value,
-            search: false,
-          })
+  const markerDelete = async () => {
+    setLoading(true)
+    const deleteMarkers = markerDatas
+      .filter(v => v.tag !== searchPlace.id)
+      .reduce((result = [], value) => {
+        result.push({
+          ...value,
+          search: false,
+        })
 
-          Preference.set('markerData', result)
-          return result
-        }, []),
-    )
+        return result
+      }, [])
+    setMarkerDatas(deleteMarkers)
+    await _uploadMarker(deleteMarkers)
     setImgResponse(null)
     setImgUrl('')
     sheetRef.current.snapTo(2)
+    setLoading(false)
   }
 
   const _imageView = () => {
@@ -484,8 +509,8 @@ const APP = () => {
     setLoading(true)
     const options = {
       mediaType: 'photo',
-      maxWidth: 512,
-      maxHeight: 512,
+      presentationStyle: 'fullScreen',
+      includeExtra: true,
     }
     const result = await launchCamera(options)
     console.log(result)
@@ -498,8 +523,8 @@ const APP = () => {
     setLoading(true)
     const options = {
       mediaType: 'photo',
-      maxWidth: 512,
-      maxHeight: 512,
+      presentationStyle: 'fullScreen',
+      includeExtra: true,
     }
     const result = await launchImageLibrary(options)
     console.log(result)
@@ -798,7 +823,9 @@ const APP = () => {
             justifyContent: 'center',
             backgroundColor: 'gray',
             opacity: 0.5,
-          }}></View>
+          }}>
+          <ActivityIndicator size={'large'} color="red" />
+        </View>
       ) : null}
       <BottomSheet ref={sheetRef} snapPoints={['70%', '48%', 0]} initialSnap={2} renderHeader={_renderHeader} renderContent={_renderContent} />
     </>
