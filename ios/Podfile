@@ -22,6 +22,8 @@ target 'rnKakaoMap' do
   
   pod 'Permission-LocationWhenInUse', :path => "#{permissions_path}/LocationWhenInUse"
 
+  pod 'react-native-video', :path => '../node_modules/react-native-video/react-native-video.podspec'
+
   target 'rnKakaoMapTests' do
     inherit! :complete
     # Pods for testing

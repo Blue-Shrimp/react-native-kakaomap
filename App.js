@@ -32,6 +32,7 @@ import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
 import storage from '@react-native-firebase/storage'
 import firestore from '@react-native-firebase/firestore'
 import ImageZoom from 'react-native-image-pan-zoom'
+import Video from 'react-native-video'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -60,9 +61,13 @@ const APP = () => {
   const [markerDate, setMarkerDate] = useState(new Date().toISOString().substring(0, 10))
   const [detailText, setDetailText] = useState('')
   const [imgResponse, setImgResponse] = useState(null)
+  const [videoResponse, setVideoResponse] = useState(null)
   const [imgUrl, setImgUrl] = useState('')
+  const [vidUrl, setVidUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [isImgModal, setIsImgModal] = useState(false)
+  const [isVideoModal, setIsVideoModal] = useState(false)
+  const player = useRef(null)
 
   const markerCollenction = firestore().collection('users')
 
@@ -233,6 +238,7 @@ const APP = () => {
       time: selectMarker.time,
       detail: selectMarker.detail,
       imgUrl: selectMarker.imgUrl,
+      vidUrl: selectMarker.vidUrl,
     }
     setLocation(current)
     setSearchPlace(placeData)
@@ -241,6 +247,7 @@ const APP = () => {
     setTitleText(selectMarker.title)
     setDetailText(selectMarker.detail)
     setImgUrl(selectMarker.imgUrl)
+    setVidUrl(selectMarker.vidUrl)
     sheetRef.current.snapTo(1)
   }
 
@@ -248,7 +255,9 @@ const APP = () => {
     Keyboard.dismiss()
     setIsSearch(false)
     setImgResponse(null)
+    setVideoResponse(null)
     setImgUrl('')
+    setVidUrl('')
     sheetRef.current.snapTo(2)
     setMarkerDatas(markerDatas.filter(v => v.save === true))
   }
@@ -278,7 +287,9 @@ const APP = () => {
   const _onSearch = async () => {
     Keyboard.dismiss()
     setImgResponse(null)
+    setVideoResponse(null)
     setImgUrl('')
+    setVidUrl('')
     sheetRef.current.snapTo(2)
 
     if (searchText === '') {
@@ -355,6 +366,7 @@ const APP = () => {
       time: new Date().toISOString().substring(0, 10),
       detail: '',
       imgUrl: '',
+      vidUrl: '',
     }
     setMarkerDatas(
       prevMarkers.concat(placeMarker).reduce((result = [], value) => {
@@ -397,23 +409,45 @@ const APP = () => {
     }
   }
 
+  const _uploadFile = async isImage => {
+    try {
+      if (isImage) {
+        const asset = imgResponse?.assets[0]
+        const reference = storage().ref(`/image/${asset.fileName}`) // 업로드할 경로 지정
+        await reference.putFile(asset.uri)
+        imageUrl = await reference.getDownloadURL()
+        console.log('imageUrl', imageUrl)
+      } else {
+        const asset = videoResponse?.assets[0]
+        const reference = storage().ref(`/video/${asset.fileName}`) // 업로드할 경로 지정
+        await reference.putFile(asset.uri)
+        videoUrl = await reference.getDownloadURL()
+        console.log('videoUrl', videoUrl)
+      }
+    } catch (error) {
+      console.log(error?.message)
+    }
+  }
+
   const markerSave = async () => {
     setLoading(true)
     let imageUrl = ''
+    let videoUrl = ''
     if (imgResponse !== null) {
-      const asset = imgResponse?.assets[0]
-      const reference = storage().ref(`/image/${asset.fileName}`) // 업로드할 경로 지정
-      await reference.putFile(asset.uri)
-      imageUrl = await reference.getDownloadURL()
-      console.log('imageUrl', imageUrl)
+      await _uploadFile(true)
+    }
+    if (videoResponse !== null) {
+      await _uploadFile(false)
     }
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText, search: false, save: true, time: markerDate, detail: detailText, imgUrl: imageUrl }
+    marker = { ...marker, title: titleText, search: false, save: true, time: markerDate, detail: detailText, imgUrl: imageUrl, vidUrl: videoUrl }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     await _uploadMarker([...others, marker])
     setImgResponse(null)
+    setVideoResponse(null)
     setImgUrl('')
+    setVidUrl('')
     sheetRef.current.snapTo(2)
     setLoading(false)
   }
@@ -421,23 +455,28 @@ const APP = () => {
   const markerModify = async () => {
     setLoading(true)
     let imageUrl = ''
+    let videoUrl = ''
     if (imgResponse !== null) {
-      const asset = imgResponse?.assets[0]
-      const reference = storage().ref(`/image/${asset.fileName}`) // 업로드할 경로 지정
-      await reference.putFile(asset.uri)
-      imageUrl = await reference.getDownloadURL()
-      console.log('imageUrl', imageUrl)
+      await _uploadFile(true)
     }
     if (imgResponse === null && imgUrl !== '') {
       imageUrl = imgUrl
     }
+    if (videoResponse !== null) {
+      await _uploadFile(false)
+    }
+    if (videoResponse === null && videoUrl !== '') {
+      videoUrl = vidUrl
+    }
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText, time: markerDate, detail: detailText, imgUrl: imageUrl }
+    marker = { ...marker, title: titleText, time: markerDate, detail: detailText, imgUrl: imageUrl, vidUrl: videoUrl }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     await _uploadMarker([...others, marker])
     setImgResponse(null)
+    setVideoResponse(null)
     setImgUrl('')
+    setVidUrl('')
     sheetRef.current.snapTo(2)
     setLoading(false)
   }
@@ -457,7 +496,9 @@ const APP = () => {
     setMarkerDatas(deleteMarkers)
     await _uploadMarker(deleteMarkers)
     setImgResponse(null)
+    setVideoResponse(null)
     setImgUrl('')
+    setVidUrl('')
     sheetRef.current.snapTo(2)
     setLoading(false)
   }
@@ -473,17 +514,79 @@ const APP = () => {
       if (imgResponse === null) {
         return (
           <Image
-            style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125 }}
+            style={{ marginTop: 10, width: 125, height: 125 }}
             source={{ uri: imgUrl }}
             onLoadStart={() => setLoading(true)}
             onLoadEnd={() => setLoading(false)}
+            onError={error => {
+              console.log('error : ', error)
+              setLoading(false)
+            }}
           />
         )
       } else {
         return (
           <Image
-            style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125 }}
+            style={{ marginTop: 10, width: 125, height: 125 }}
             source={{ uri: imgResponse?.assets[0]?.uri }}
+            onError={error => {
+              console.log('error : ', error)
+              setLoading(false)
+            }}
+          />
+        )
+      }
+    }
+  }
+
+  const _videoView = () => {
+    if (videoResponse === null && vidUrl === '') {
+      return (
+        <View style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' }}>
+          <Text style={{ alignSelf: 'center', color: 'gray', fontSize: 30 }}>+</Text>
+        </View>
+      )
+    } else {
+      if (videoResponse === null) {
+        return (
+          <Video
+            source={{ uri: vidUrl }}
+            ref={player}
+            paused={true}
+            style={{ marginTop: 10, width: 125, height: 125 }}
+            resizeMode={'stretch'}
+            onLoadStart={() => {
+              setLoading(true)
+            }}
+            onLoad={() => {
+              setLoading(false)
+              player?.current.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
+            }}
+            onError={error => {
+              console.log('error : ', error)
+              setLoading(false)
+            }}
+          />
+        )
+      } else {
+        return (
+          <Video
+            source={{ uri: videoResponse?.assets[0]?.uri }}
+            ref={player}
+            paused={true}
+            style={{ marginTop: 10, width: 125, height: 125 }}
+            resizeMode={'stretch'}
+            onLoadStart={() => {
+              setLoading(true)
+            }}
+            onLoad={() => {
+              setLoading(false)
+              player?.current.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
+            }}
+            onError={error => {
+              console.log('error : ', error)
+              setLoading(false)
+            }}
           />
         )
       }
@@ -493,20 +596,22 @@ const APP = () => {
   const _modalOpen = () => {
     ActionSheetIOS.showActionSheetWithOptions(
       {
-        options: ['카메라로 촬영하기', '사진 선택하기', '취소'],
-        cancelButtonIndex: 2,
+        options: ['사진 촬영하기', '동영상 촬영하기', '앨범에서 선택하기', '취소'],
+        cancelButtonIndex: 3,
       },
       buttonIndex => {
         if (buttonIndex === 0) {
-          _onSelectCamera()
+          _onImageCamera()
         } else if (buttonIndex === 1) {
+          _onVideoCamera()
+        } else if (buttonIndex === 2) {
           _onSelectImage()
         }
       },
     )
   }
 
-  const _onSelectCamera = async () => {
+  const _onImageCamera = async () => {
     setLoading(true)
     const options = {
       mediaType: 'photo',
@@ -522,10 +627,25 @@ const APP = () => {
     setImgResponse(result)
   }
 
+  const _onVideoCamera = async () => {
+    setLoading(true)
+    const options = {
+      mediaType: 'video',
+      presentationStyle: 'fullScreen',
+      includeExtra: true,
+      videoQuality: 'medium',
+    }
+    const result = await launchCamera(options)
+    console.log(result)
+    setLoading(false)
+    if (result?.assets === undefined) return
+    setVideoResponse(result)
+  }
+
   const _onSelectImage = async () => {
     setLoading(true)
     const options = {
-      mediaType: 'photo',
+      mediaType: 'mixed',
       presentationStyle: 'fullScreen',
       includeExtra: true,
       maxWidth: 1024,
@@ -535,7 +655,11 @@ const APP = () => {
     console.log(result)
     setLoading(false)
     if (result?.assets === undefined) return
-    setImgResponse(result)
+    if (result?.assets[0]?.type.includes('image')) {
+      setImgResponse(result)
+    } else {
+      setVideoResponse(result)
+    }
   }
 
   const _renderHeader = () => {
@@ -639,9 +763,16 @@ const APP = () => {
           keyboardAppearance={'default'}
           textAlignVertical={'center'}
         />
-        <TouchableOpacity onPress={() => (imgResponse === null && imgUrl === '' ? _modalOpen() : setIsImgModal(true))}>
-          {_imageView()}
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity onPress={() => (imgResponse === null && imgUrl === '' ? _modalOpen() : setIsImgModal(true))}>
+            {_imageView()}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => (videoResponse === null && vidUrl === '' ? _modalOpen() : setIsVideoModal(true))}
+            style={{ marginLeft: 5 }}>
+            {_videoView()}
+          </TouchableOpacity>
+        </View>
         {loading ? _loadingView() : null}
       </ScrollView>
     )
@@ -692,7 +823,9 @@ const APP = () => {
             value={searchText}
             onFocus={() => {
               setImgResponse(null)
+              setVideoResponse(null)
               setImgUrl('')
+              setVidUrl('')
               sheetRef.current.snapTo(2)
             }}
           />
@@ -806,8 +939,92 @@ const APP = () => {
                   source={{ uri: imgResponse === null ? imgUrl : imgResponse?.assets[0]?.uri }}
                   onLoadStart={() => setLoading(true)}
                   onLoadEnd={() => setLoading(false)}
+                  onError={error => {
+                    console.log('error : ', error)
+                    setLoading(false)
+                  }}
                 />
               </ImageZoom>
+            )}
+          </View>
+          {loading ? (
+            <View
+              style={{
+                backgroundColor: 'black',
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                justifyContent: 'center',
+              }}>
+              <ActivityIndicator size={'large'} color="red" />
+            </View>
+          ) : null}
+        </Modal>
+
+        <Modal
+          isVisible={isVideoModal}
+          style={{ flex: 1, backgroundColor: 'black', paddingTop: 30 }}
+          backdropTransitionOutTiming={0}
+          onBackdropPress={() => {
+            setIsVideoModal(false)
+          }}>
+          <View style={{ flexDirection: 'row', marginHorizontal: 10, justifyContent: 'space-between' }}>
+            <TouchableOpacity>
+              <Text
+                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                onPress={() => {
+                  setIsVideoModal(false)
+                }}>
+                X
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <Text
+                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                onPress={() => {
+                  ActionSheetIOS.showActionSheetWithOptions(
+                    {
+                      options: ['수정하기', '삭제하기', '취소'],
+                      cancelButtonIndex: 2,
+                    },
+                    buttonIndex => {
+                      if (buttonIndex === 0) {
+                        setIsVideoModal(false)
+                        setTimeout(() => {
+                          _modalOpen()
+                        }, 500)
+                      } else if (buttonIndex === 1) {
+                        setVidUrl('')
+                        setVideoResponse(null)
+                        setIsVideoModal(false)
+                      }
+                    },
+                  )
+                }}>
+                ...
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            {videoResponse === null && vidUrl === '' ? null : (
+              <Video
+                source={{ uri: videoResponse === null ? vidUrl : videoResponse?.assets[0]?.uri }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  bottom: 0,
+                  right: 0,
+                }}
+                controls={true}
+                fullscreen={true}
+                onLoadStart={() => setLoading(true)}
+                onLoad={() => setLoading(false)}
+                onError={error => {
+                  console.log('error : ', error)
+                  setLoading(false)
+                }}
+              />
             )}
           </View>
           {loading ? (
