@@ -31,6 +31,7 @@ import 'react-native-gesture-handler'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
 import storage from '@react-native-firebase/storage'
 import firestore from '@react-native-firebase/firestore'
+import ImageZoom from 'react-native-image-pan-zoom'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -511,6 +512,8 @@ const APP = () => {
       mediaType: 'photo',
       presentationStyle: 'fullScreen',
       includeExtra: true,
+      maxWidth: 1024,
+      maxHeight: 1024,
     }
     const result = await launchCamera(options)
     console.log(result)
@@ -525,6 +528,8 @@ const APP = () => {
       mediaType: 'photo',
       presentationStyle: 'fullScreen',
       includeExtra: true,
+      maxWidth: 1024,
+      maxHeight: 1024,
     }
     const result = await launchImageLibrary(options)
     console.log(result)
@@ -790,13 +795,19 @@ const APP = () => {
           </View>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             {imgResponse === null && imgUrl === '' ? null : (
-              <Image
-                style={{ width: '100%', height: '100%' }}
-                resizeMode={'contain'}
-                source={{ uri: imgResponse === null ? imgUrl : imgResponse?.assets[0]?.uri }}
-                onLoadStart={() => setLoading(true)}
-                onLoadEnd={() => setLoading(false)}
-              />
+              <ImageZoom
+                cropWidth={Dimensions.get('window').width - 40}
+                cropHeight={Dimensions.get('window').height - 120}
+                imageWidth={Dimensions.get('window').width - 40}
+                imageHeight={Dimensions.get('window').height - 120}>
+                <Image
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode={'contain'}
+                  source={{ uri: imgResponse === null ? imgUrl : imgResponse?.assets[0]?.uri }}
+                  onLoadStart={() => setLoading(true)}
+                  onLoadEnd={() => setLoading(false)}
+                />
+              </ImageZoom>
             )}
           </View>
           {loading ? (
