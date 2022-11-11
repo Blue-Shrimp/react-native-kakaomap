@@ -60,14 +60,12 @@ const APP = () => {
   const [pickerDate, setPickerDate] = useState(new Date().toISOString().substring(0, 10))
   const [markerDate, setMarkerDate] = useState(new Date().toISOString().substring(0, 10))
   const [detailText, setDetailText] = useState('')
-  const [imgResponse, setImgResponse] = useState(null)
-  const [videoResponse, setVideoResponse] = useState(null)
-  const [imgUrl, setImgUrl] = useState('')
-  const [vidUrl, setVidUrl] = useState('')
+  const [currentFile, setCurrentFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [isImgModal, setIsImgModal] = useState(false)
   const [isVideoModal, setIsVideoModal] = useState(false)
   const player = useRef(null)
+  const [fileResponseList, setFileResponseList] = useState([])
 
   const markerCollenction = firestore().collection('users')
 
@@ -237,8 +235,7 @@ const APP = () => {
       isSave: selectMarker.save,
       time: selectMarker.time,
       detail: selectMarker.detail,
-      imgUrl: selectMarker.imgUrl,
-      vidUrl: selectMarker.vidUrl,
+      fileUrlList: selectMarker.fileUrlList,
     }
     setLocation(current)
     setSearchPlace(placeData)
@@ -246,18 +243,14 @@ const APP = () => {
     setPickerDate(selectMarker.time)
     setTitleText(selectMarker.title)
     setDetailText(selectMarker.detail)
-    setImgUrl(selectMarker.imgUrl)
-    setVidUrl(selectMarker.vidUrl)
+    setFileResponseList(selectMarker.fileUrlList)
     sheetRef.current.snapTo(1)
   }
 
   const _onMapTouch = event => {
     Keyboard.dismiss()
     setIsSearch(false)
-    setImgResponse(null)
-    setVideoResponse(null)
-    setImgUrl('')
-    setVidUrl('')
+    setFileResponseList([])
     sheetRef.current.snapTo(2)
     setMarkerDatas(markerDatas.filter(v => v.save === true))
   }
@@ -286,10 +279,7 @@ const APP = () => {
 
   const _onSearch = async () => {
     Keyboard.dismiss()
-    setImgResponse(null)
-    setVideoResponse(null)
-    setImgUrl('')
-    setVidUrl('')
+    setFileResponseList([])
     sheetRef.current.snapTo(2)
 
     if (searchText === '') {
@@ -314,12 +304,7 @@ const APP = () => {
       },
     }
     return await fetch(
-      'https://dapi.kakao.com/v2/local/search/keyword.json?page=1&size=10&sort=accuracy&x=' +
-        myLocation.longitude +
-        '&y=' +
-        myLocation.latitude +
-        '&query=' +
-        keyword,
+      kakaoGeocodeUrl + '?page=1&size=10&sort=accuracy&x=' + myLocation.longitude + '&y=' + myLocation.latitude + '&query=' + keyword,
       option,
     )
       .then(response => {
@@ -365,8 +350,7 @@ const APP = () => {
       save: false,
       time: new Date().toISOString().substring(0, 10),
       detail: '',
-      imgUrl: '',
-      vidUrl: '',
+      fileUrlList: [],
     }
     setMarkerDatas(
       prevMarkers.concat(placeMarker).reduce((result = [], value) => {
@@ -396,6 +380,7 @@ const APP = () => {
       setMarkerDatas(data?._data?.markerData)
       setLoading(false)
     } catch (error) {
+      setLoading(false)
       console.log(error.message)
     }
   }
@@ -409,74 +394,71 @@ const APP = () => {
     }
   }
 
-  const _uploadFile = async isImage => {
-    try {
-      if (isImage) {
-        const asset = imgResponse?.assets[0]
-        const reference = storage().ref(`/image/${asset.fileName}`) // 업로드할 경로 지정
-        await reference.putFile(asset.uri)
-        imageUrl = await reference.getDownloadURL()
-        console.log('imageUrl', imageUrl)
-      } else {
-        const asset = videoResponse?.assets[0]
-        const reference = storage().ref(`/video/${asset.fileName}`) // 업로드할 경로 지정
-        await reference.putFile(asset.uri)
-        videoUrl = await reference.getDownloadURL()
-        console.log('videoUrl', videoUrl)
-      }
-    } catch (error) {
-      console.log(error?.message)
-    }
+  const _uploadFileList = async () => {
+    let imageUrl = ''
+    let videoUrl = ''
+    const result = await Promise.all(
+      fileResponseList.map(async item => {
+        if (item.uri.includes('firebasestorage')) {
+          return item
+        } else {
+          if (item.type.includes('image')) {
+            const reference = storage().ref(`/image/${item.fileName}`) // 업로드할 경로 지정
+            await reference.putFile(item.uri)
+            imageUrl = await reference.getDownloadURL()
+            console.log('imageUrl', imageUrl)
+            const itemImage = { type: item.type, fileName: item.fileName, uri: imageUrl }
+            return itemImage
+          } else {
+            const reference = storage().ref(`/video/${item.fileName}`) // 업로드할 경로 지정
+            await reference.putFile(item.uri)
+            videoUrl = await reference.getDownloadURL()
+            console.log('videoUrl', videoUrl)
+            const itemVideo = { type: item.type, fileName: item.fileName, uri: videoUrl }
+            return itemVideo
+          }
+        }
+      }),
+    )
+    return result
   }
 
   const markerSave = async () => {
     setLoading(true)
-    let imageUrl = ''
-    let videoUrl = ''
-    if (imgResponse !== null) {
-      await _uploadFile(true)
-    }
-    if (videoResponse !== null) {
-      await _uploadFile(false)
+    let fileList = []
+    if (fileResponseList.length > 0) {
+      fileList = await _uploadFileList()
     }
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText, search: false, save: true, time: markerDate, detail: detailText, imgUrl: imageUrl, vidUrl: videoUrl }
+    marker = {
+      ...marker,
+      title: titleText,
+      search: false,
+      save: true,
+      time: markerDate,
+      detail: detailText,
+      fileUrlList: fileList,
+    }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     await _uploadMarker([...others, marker])
-    setImgResponse(null)
-    setVideoResponse(null)
-    setImgUrl('')
-    setVidUrl('')
+    setFileResponseList([])
     sheetRef.current.snapTo(2)
     setLoading(false)
   }
 
   const markerModify = async () => {
     setLoading(true)
-    let imageUrl = ''
-    let videoUrl = ''
-    if (imgResponse !== null) {
-      await _uploadFile(true)
-    }
-    if (imgResponse === null && imgUrl !== '') {
-      imageUrl = imgUrl
-    }
-    if (videoResponse !== null) {
-      await _uploadFile(false)
-    }
-    if (videoResponse === null && videoUrl !== '') {
-      videoUrl = vidUrl
+    let fileList = []
+    if (fileResponseList.length > 0) {
+      fileList = await _uploadFileList()
     }
     let marker = markerDatas.filter(v => v.tag === searchPlace.id)[0]
-    marker = { ...marker, title: titleText, time: markerDate, detail: detailText, imgUrl: imageUrl, vidUrl: videoUrl }
+    marker = { ...marker, title: titleText, time: markerDate, detail: detailText, fileUrlList: fileList }
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     await _uploadMarker([...others, marker])
-    setImgResponse(null)
-    setVideoResponse(null)
-    setImgUrl('')
-    setVidUrl('')
+    setFileResponseList([])
     sheetRef.current.snapTo(2)
     setLoading(false)
   }
@@ -495,101 +477,48 @@ const APP = () => {
       }, [])
     setMarkerDatas(deleteMarkers)
     await _uploadMarker(deleteMarkers)
-    setImgResponse(null)
-    setVideoResponse(null)
-    setImgUrl('')
-    setVidUrl('')
+    setFileResponseList([])
     sheetRef.current.snapTo(2)
     setLoading(false)
   }
 
-  const _imageView = () => {
-    if (imgResponse === null && imgUrl === '') {
+  const _preView = item => {
+    if (item.type.includes('image')) {
       return (
-        <View style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' }}>
-          <Text style={{ alignSelf: 'center', color: 'gray', fontSize: 30 }}>+</Text>
-        </View>
+        <Image
+          style={{ marginTop: 10, width: 125, height: 125 }}
+          source={{ uri: item.uri }}
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+          onError={error => {
+            console.log('error : ', error)
+            setLoading(false)
+          }}
+        />
       )
     } else {
-      if (imgResponse === null) {
-        return (
-          <Image
-            style={{ marginTop: 10, width: 125, height: 125 }}
-            source={{ uri: imgUrl }}
-            onLoadStart={() => setLoading(true)}
-            onLoadEnd={() => setLoading(false)}
-            onError={error => {
-              console.log('error : ', error)
-              setLoading(false)
-            }}
-          />
-        )
-      } else {
-        return (
-          <Image
-            style={{ marginTop: 10, width: 125, height: 125 }}
-            source={{ uri: imgResponse?.assets[0]?.uri }}
-            onError={error => {
-              console.log('error : ', error)
-              setLoading(false)
-            }}
-          />
-        )
-      }
-    }
-  }
-
-  const _videoView = () => {
-    if (videoResponse === null && vidUrl === '') {
       return (
-        <View style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' }}>
-          <Text style={{ alignSelf: 'center', color: 'gray', fontSize: 30 }}>+</Text>
-        </View>
+        <Video
+          source={{ uri: item.uri }}
+          ref={player}
+          paused={true}
+          style={{ marginTop: 10, width: 125, height: 125 }}
+          resizeMode={'stretch'}
+          onLoadStart={() => {
+            console.log('start')
+            setLoading(true)
+          }}
+          onLoad={() => {
+            console.log('end')
+            setLoading(false)
+            player?.current.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
+          }}
+          onError={error => {
+            console.log('error : ', error)
+            setLoading(false)
+          }}
+        />
       )
-    } else {
-      if (videoResponse === null) {
-        return (
-          <Video
-            source={{ uri: vidUrl }}
-            ref={player}
-            paused={true}
-            style={{ marginTop: 10, width: 125, height: 125 }}
-            resizeMode={'stretch'}
-            onLoadStart={() => {
-              setLoading(true)
-            }}
-            onLoad={() => {
-              setLoading(false)
-              player?.current.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
-            }}
-            onError={error => {
-              console.log('error : ', error)
-              setLoading(false)
-            }}
-          />
-        )
-      } else {
-        return (
-          <Video
-            source={{ uri: videoResponse?.assets[0]?.uri }}
-            ref={player}
-            paused={true}
-            style={{ marginTop: 10, width: 125, height: 125 }}
-            resizeMode={'stretch'}
-            onLoadStart={() => {
-              setLoading(true)
-            }}
-            onLoad={() => {
-              setLoading(false)
-              player?.current.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
-            }}
-            onError={error => {
-              console.log('error : ', error)
-              setLoading(false)
-            }}
-          />
-        )
-      }
     }
   }
 
@@ -612,6 +541,7 @@ const APP = () => {
   }
 
   const _onImageCamera = async () => {
+    console.log('fileResponseList : ', fileResponseList)
     setLoading(true)
     const options = {
       mediaType: 'photo',
@@ -624,10 +554,38 @@ const APP = () => {
     console.log(result)
     setLoading(false)
     if (result?.assets === undefined) return
-    setImgResponse(result)
+    if (currentFile !== null) {
+      const modify = fileResponseList.reduce((list = [], value) => {
+        if (value.fileName === currentFile.fileName) {
+          list.push({
+            ...value,
+            type: result?.assets[0]?.type,
+            fileName: result?.assets[0]?.fileName,
+            uri: result?.assets[0]?.uri,
+          })
+        } else {
+          list.push({
+            ...value,
+          })
+        }
+
+        return list
+      }, [])
+      setFileResponseList(modify)
+    } else {
+      setFileResponseList(
+        fileResponseList.concat({
+          type: result?.assets[0]?.type,
+          fileName: result?.assets[0]?.fileName,
+          uri: result?.assets[0]?.uri,
+        }),
+      )
+    }
+    setCurrentFile(null)
   }
 
   const _onVideoCamera = async () => {
+    console.log('fileResponseList : ', fileResponseList)
     setLoading(true)
     const options = {
       mediaType: 'video',
@@ -639,10 +597,38 @@ const APP = () => {
     console.log(result)
     setLoading(false)
     if (result?.assets === undefined) return
-    setVideoResponse(result)
+    if (currentFile !== null) {
+      const modify = fileResponseList.reduce((list = [], value) => {
+        if (value.fileName === currentFile.fileName) {
+          list.push({
+            ...value,
+            type: result?.assets[0]?.type,
+            fileName: result?.assets[0]?.fileName,
+            uri: result?.assets[0]?.uri,
+          })
+        } else {
+          list.push({
+            ...value,
+          })
+        }
+
+        return list
+      }, [])
+      setFileResponseList(modify)
+    } else {
+      setFileResponseList(
+        fileResponseList.concat({
+          type: result?.assets[0]?.type,
+          fileName: result?.assets[0]?.fileName,
+          uri: result?.assets[0]?.uri,
+        }),
+      )
+    }
+    setCurrentFile(null)
   }
 
   const _onSelectImage = async () => {
+    console.log('fileResponseList : ', fileResponseList)
     setLoading(true)
     const options = {
       mediaType: 'mixed',
@@ -655,11 +641,34 @@ const APP = () => {
     console.log(result)
     setLoading(false)
     if (result?.assets === undefined) return
-    if (result?.assets[0]?.type.includes('image')) {
-      setImgResponse(result)
+    if (currentFile !== null) {
+      const modify = fileResponseList.reduce((list = [], value) => {
+        if (value.fileName === currentFile.fileName) {
+          list.push({
+            ...value,
+            type: result?.assets[0]?.type,
+            fileName: result?.assets[0]?.fileName,
+            uri: result?.assets[0]?.uri,
+          })
+        } else {
+          list.push({
+            ...value,
+          })
+        }
+
+        return list
+      }, [])
+      setFileResponseList(modify)
     } else {
-      setVideoResponse(result)
+      setFileResponseList(
+        fileResponseList.concat({
+          type: result?.assets[0]?.type,
+          fileName: result?.assets[0]?.fileName,
+          uri: result?.assets[0]?.uri,
+        }),
+      )
     }
+    setCurrentFile(null)
   }
 
   const _renderHeader = () => {
@@ -702,6 +711,38 @@ const APP = () => {
       <ActivityIndicator size={'large'} color="red" />
     </View>
   )
+
+  const _fileView = () => {
+    return (
+      <ScrollView horizontal={true}>
+        {fileResponseList?.length > 0
+          ? fileResponseList.map(item => {
+              return (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (item.type.includes('image')) {
+                      setCurrentFile(item)
+                      setIsImgModal(true)
+                    } else {
+                      setCurrentFile(item)
+                      setIsVideoModal(true)
+                    }
+                  }}
+                  style={{ marginRight: 5 }}
+                  key={item.fileName}>
+                  {_preView(item)}
+                </TouchableOpacity>
+              )
+            })
+          : null}
+        <TouchableOpacity onPress={() => _modalOpen()}>
+          <View style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' }}>
+            <Text style={{ alignSelf: 'center', color: 'gray', fontSize: 30 }}>+</Text>
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
+    )
+  }
 
   const _renderContent = () => {
     return (
@@ -750,7 +791,7 @@ const APP = () => {
           </TouchableOpacity>
         </View>
         <TextInput
-          style={{ borderWidth: 0.5, borderColor: 'gray', marginTop: 15, minHeight: 95, color: 'black', paddingVertical: 5, paddingHorizontal: 5 }}
+          style={{ borderWidth: 0.5, borderColor: 'gray', marginTop: 15, minHeight: 80, color: 'black', paddingVertical: 5, paddingHorizontal: 5 }}
           onFocus={() => sheetRef.current.snapTo(0)}
           multiline={true}
           placeholder={'추억을 기록해보세요.'}
@@ -763,16 +804,7 @@ const APP = () => {
           keyboardAppearance={'default'}
           textAlignVertical={'center'}
         />
-        <View style={{ flexDirection: 'row' }}>
-          <TouchableOpacity onPress={() => (imgResponse === null && imgUrl === '' ? _modalOpen() : setIsImgModal(true))}>
-            {_imageView()}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => (videoResponse === null && vidUrl === '' ? _modalOpen() : setIsVideoModal(true))}
-            style={{ marginLeft: 5 }}>
-            {_videoView()}
-          </TouchableOpacity>
-        </View>
+        <View style={{ flexDirection: 'row' }}>{_fileView()}</View>
         {loading ? _loadingView() : null}
       </ScrollView>
     )
@@ -822,10 +854,7 @@ const APP = () => {
             onSubmitEditing={_onSearch}
             value={searchText}
             onFocus={() => {
-              setImgResponse(null)
-              setVideoResponse(null)
-              setImgUrl('')
-              setVidUrl('')
+              setFileResponseList([])
               sheetRef.current.snapTo(2)
             }}
           />
@@ -887,6 +916,7 @@ const APP = () => {
           style={{ flex: 1, backgroundColor: 'black', paddingTop: 30 }}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
+            setCurrentFile(null)
             setIsImgModal(false)
           }}>
           <View style={{ flexDirection: 'row', marginHorizontal: 10, justifyContent: 'space-between' }}>
@@ -894,6 +924,7 @@ const APP = () => {
               <Text
                 style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
                 onPress={() => {
+                  setCurrentFile(null)
                   setIsImgModal(false)
                 }}>
                 X
@@ -915,8 +946,8 @@ const APP = () => {
                           _modalOpen()
                         }, 500)
                       } else if (buttonIndex === 1) {
-                        setImgUrl('')
-                        setImgResponse(null)
+                        setFileResponseList(fileResponseList.filter(v => v.fileName !== currentFile.fileName))
+                        setCurrentFile(null)
                         setIsImgModal(false)
                       }
                     },
@@ -927,7 +958,7 @@ const APP = () => {
             </TouchableOpacity>
           </View>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            {imgResponse === null && imgUrl === '' ? null : (
+            {currentFile === null ? null : (
               <ImageZoom
                 cropWidth={Dimensions.get('window').width - 40}
                 cropHeight={Dimensions.get('window').height - 120}
@@ -936,7 +967,7 @@ const APP = () => {
                 <Image
                   style={{ width: '100%', height: '100%' }}
                   resizeMode={'contain'}
-                  source={{ uri: imgResponse === null ? imgUrl : imgResponse?.assets[0]?.uri }}
+                  source={{ uri: currentFile?.uri }}
                   onLoadStart={() => setLoading(true)}
                   onLoadEnd={() => setLoading(false)}
                   onError={error => {
@@ -966,6 +997,7 @@ const APP = () => {
           style={{ flex: 1, backgroundColor: 'black', paddingTop: 30 }}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
+            setCurrentFile(null)
             setIsVideoModal(false)
           }}>
           <View style={{ flexDirection: 'row', marginHorizontal: 10, justifyContent: 'space-between' }}>
@@ -973,6 +1005,7 @@ const APP = () => {
               <Text
                 style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
                 onPress={() => {
+                  setCurrentFile(null)
                   setIsVideoModal(false)
                 }}>
                 X
@@ -994,8 +1027,8 @@ const APP = () => {
                           _modalOpen()
                         }, 500)
                       } else if (buttonIndex === 1) {
-                        setVidUrl('')
-                        setVideoResponse(null)
+                        setFileResponseList(fileResponseList.filter(v => v.fileName !== currentFile.fileName))
+                        setCurrentFile(null)
                         setIsVideoModal(false)
                       }
                     },
@@ -1006,9 +1039,9 @@ const APP = () => {
             </TouchableOpacity>
           </View>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            {videoResponse === null && vidUrl === '' ? null : (
+            {currentFile === null ? null : (
               <Video
-                source={{ uri: videoResponse === null ? vidUrl : videoResponse?.assets[0]?.uri }}
+                source={{ uri: currentFile?.uri }}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -1138,7 +1171,7 @@ const styles = StyleSheet.create({
   },
   panelHeader: {
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 5,
   },
   panelHandle: {
     width: 57,
