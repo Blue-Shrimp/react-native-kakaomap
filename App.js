@@ -62,6 +62,7 @@ const APP = () => {
   const [detailText, setDetailText] = useState('')
   const [currentFile, setCurrentFile] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [videoLoading, setVideoLoading] = useState(false)
   const [isImgModal, setIsImgModal] = useState(false)
   const [isVideoModal, setIsVideoModal] = useState(false)
   const player = useRef(null)
@@ -397,30 +398,34 @@ const APP = () => {
   const _uploadFileList = async () => {
     let imageUrl = ''
     let videoUrl = ''
-    const result = await Promise.all(
-      fileResponseList.map(async item => {
-        if (item.uri.includes('firebasestorage')) {
-          return item
-        } else {
-          if (item.type.includes('image')) {
-            const reference = storage().ref(`/image/${item.fileName}`) // 업로드할 경로 지정
-            await reference.putFile(item.uri)
-            imageUrl = await reference.getDownloadURL()
-            console.log('imageUrl', imageUrl)
-            const itemImage = { type: item.type, fileName: item.fileName, uri: imageUrl }
-            return itemImage
+    try {
+      const result = await Promise.all(
+        fileResponseList.map(async item => {
+          if (item.uri.includes('firebasestorage')) {
+            return item
           } else {
-            const reference = storage().ref(`/video/${item.fileName}`) // 업로드할 경로 지정
-            await reference.putFile(item.uri)
-            videoUrl = await reference.getDownloadURL()
-            console.log('videoUrl', videoUrl)
-            const itemVideo = { type: item.type, fileName: item.fileName, uri: videoUrl }
-            return itemVideo
+            if (item.type.includes('image')) {
+              const reference = storage().ref(`/image/${item.fileName}`) // 업로드할 경로 지정
+              await reference.putFile(item.uri)
+              imageUrl = await reference.getDownloadURL()
+              console.log('imageUrl', imageUrl)
+              const itemImage = { type: item.type, fileName: item.fileName, uri: imageUrl }
+              return itemImage
+            } else {
+              const reference = storage().ref(`/video/${item.fileName}`) // 업로드할 경로 지정
+              await reference.putFile(item.uri)
+              videoUrl = await reference.getDownloadURL()
+              console.log('videoUrl', videoUrl)
+              const itemVideo = { type: item.type, fileName: item.fileName, uri: videoUrl }
+              return itemVideo
+            }
           }
-        }
-      }),
-    )
-    return result
+        }),
+      )
+      return result
+    } catch (error) {
+      console.log('errororroro : ', error)
+    }
   }
 
   const markerSave = async () => {
@@ -486,7 +491,7 @@ const APP = () => {
     if (item.type.includes('image')) {
       return (
         <Image
-          style={{ marginTop: 10, width: 125, height: 125 }}
+          style={styles.preivew}
           source={{ uri: item.uri }}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
@@ -502,20 +507,18 @@ const APP = () => {
           source={{ uri: item.uri }}
           ref={player}
           paused={true}
-          style={{ marginTop: 10, width: 125, height: 125 }}
+          style={styles.preivew}
           resizeMode={'stretch'}
           onLoadStart={() => {
-            console.log('start')
-            setLoading(true)
+            setVideoLoading(true)
           }}
           onLoad={() => {
-            console.log('end')
-            setLoading(false)
+            setVideoLoading(false)
             player?.current.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
           }}
           onError={error => {
             console.log('error : ', error)
-            setLoading(false)
+            setVideoLoading(false)
           }}
         />
       )
@@ -672,27 +675,27 @@ const APP = () => {
   }
 
   const _renderHeader = () => {
-    return loading ? null : (
+    return loading || videoLoading ? null : (
       <View style={styles.header}>
         <View style={styles.panelHeader}>
           <View style={styles.panelHandle} />
         </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16 }}>
+        <View style={styles.modifyContainer}>
           <TouchableOpacity
             onPress={() => {
               searchPlace?.isSave ? markerModify() : markerSave()
               Keyboard.dismiss()
             }}
-            style={{ borderBottomWidth: 0.3, paddingBottom: 5, marginRight: 5 }}>
-            <Text style={{ fontSize: 16 }}>{searchPlace?.isSave ? '수정' : '저장'}</Text>
+            style={styles.modify}>
+            <Text style={styles.modifyText}>{searchPlace?.isSave ? '수정' : '저장'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
               markerDelete()
               Keyboard.dismiss()
             }}
-            style={{ borderBottomWidth: 0.3, paddingBottom: 5 }}>
-            <Text style={{ fontSize: 16 }}>삭제</Text>
+            style={styles.delete}>
+            <Text style={styles.modifyText}>삭제</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -700,14 +703,7 @@ const APP = () => {
   }
 
   const _loadingView = () => (
-    <View
-      style={{
-        backgroundColor: 'white',
-        position: 'absolute',
-        width: '100%',
-        height: '100%',
-        justifyContent: 'center',
-      }}>
+    <View style={styles.loadingView}>
       <ActivityIndicator size={'large'} color="red" />
     </View>
   )
@@ -728,7 +724,7 @@ const APP = () => {
                       setIsVideoModal(true)
                     }
                   }}
-                  style={{ marginRight: 5 }}
+                  style={styles.fileView}
                   key={item.fileName}>
                   {_preView(item)}
                 </TouchableOpacity>
@@ -736,8 +732,8 @@ const APP = () => {
             })
           : null}
         <TouchableOpacity onPress={() => _modalOpen()}>
-          <View style={{ marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' }}>
-            <Text style={{ alignSelf: 'center', color: 'gray', fontSize: 30 }}>+</Text>
+          <View style={styles.fileAddView}>
+            <Text style={styles.plusText}>+</Text>
           </View>
         </TouchableOpacity>
       </ScrollView>
@@ -746,14 +742,9 @@ const APP = () => {
 
   const _renderContent = () => {
     return (
-      <ScrollView
-        style={{
-          backgroundColor: 'white',
-          padding: 16,
-          minHeight: '100%',
-        }}>
+      <ScrollView style={styles.bottomContent}>
         <TextInput
-          style={{ borderBottomWidth: 0.3, alignSelf: 'center', width: '100%', fontSize: 22, paddingBottom: 8, fontWeight: 'bold' }}
+          style={styles.titleText}
           onChangeText={_onChangeTitle}
           autoCapitalize={'none'}
           autoCorrect={false}
@@ -765,33 +756,25 @@ const APP = () => {
           value={titleText}
           onFocus={() => sheetRef.current.snapTo(0)}
         />
-        <View style={{ flexDirection: 'row', marginTop: 10, justifyContent: 'space-between' }}>
+        <View style={styles.addressView}>
           <Text>장소</Text>
-          <View style={{ flexDirection: 'row' }}>
-            <Image
-              style={{
-                width: 12,
-                height: 12,
-                alignSelf: 'center',
-                marginRight: 3,
-              }}
-              source={require('./images/marker.png')}
-            />
-            <Text style={{ textAlign: 'center' }}>{searchPlace?.address_name}</Text>
+          <View style={styles.addressViewContainer}>
+            <Image style={styles.markerImage} source={require('./images/marker.png')} />
+            <Text style={styles.addressText}>{searchPlace?.address_name}</Text>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', marginTop: 10, justifyContent: 'space-between' }}>
+        <View style={styles.dateView}>
           <Text>방문일자</Text>
           <TouchableOpacity
             onPress={() => {
               setModalVisible(true)
             }}
-            style={{ borderBottomWidth: 0.3, alignSelf: 'center', paddingBottom: 5 }}>
+            style={styles.dateViewContainer}>
             <Text>{markerDate}</Text>
           </TouchableOpacity>
         </View>
         <TextInput
-          style={{ borderWidth: 0.5, borderColor: 'gray', marginTop: 15, minHeight: 80, color: 'black', paddingVertical: 5, paddingHorizontal: 5 }}
+          style={styles.detail}
           onFocus={() => sheetRef.current.snapTo(0)}
           multiline={true}
           placeholder={'추억을 기록해보세요.'}
@@ -804,8 +787,8 @@ const APP = () => {
           keyboardAppearance={'default'}
           textAlignVertical={'center'}
         />
-        <View style={{ flexDirection: 'row' }}>{_fileView()}</View>
-        {loading ? _loadingView() : null}
+        <View style={styles.fileViewContainer}>{_fileView()}</View>
+        {loading || videoLoading ? _loadingView() : null}
       </ScrollView>
     )
   }
@@ -815,7 +798,7 @@ const APP = () => {
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.screen}>
         <MapView
-          style={{ flex: 1 }}
+          style={styles.mapview}
           isTracking={isTracking.current}
           initialRegion={location}
           markers={markerDatas}
@@ -869,14 +852,14 @@ const APP = () => {
         </View>
         <Modal
           isVisible={isModalVisible}
-          style={{ flex: 1, justifyContent: 'center' }}
+          style={styles.dateModal}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
             setModalVisible(false)
             setPickerDate(markerDate)
           }}>
           <DatePicker
-            style={{ width: '100%', backgroundColor: 'gray' }}
+            style={styles.datePicker}
             date={new Date(pickerDate)}
             mode="date"
             use12Hours
@@ -885,44 +868,35 @@ const APP = () => {
               setPickerDate(date.toISOString().substring(0, 10))
             }}
           />
-          <View
-            style={{
-              width: '100%',
-              backgroundColor: 'gray',
-              flexDirection: 'row',
-              justifyContent: 'flex-end',
-              borderTopWidth: 0.5,
-              borderTopColor: 'white',
-              paddingTop: 10,
-            }}>
+          <View style={styles.dateModalView}>
             <TouchableOpacity
               onPress={() => {
                 setModalVisible(false)
                 setPickerDate(markerDate)
               }}>
-              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginRight: 10, marginBottom: 5 }}>취소</Text>
+              <Text style={styles.dateModalText}>취소</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 setModalVisible(false)
                 setMarkerDate(pickerDate)
               }}>
-              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginRight: 10, marginBottom: 5 }}>확인</Text>
+              <Text style={styles.dateModalText}>확인</Text>
             </TouchableOpacity>
           </View>
         </Modal>
         <Modal
           isVisible={isImgModal}
-          style={{ flex: 1, backgroundColor: 'black', paddingTop: 30 }}
+          style={styles.modal}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
             setCurrentFile(null)
             setIsImgModal(false)
           }}>
-          <View style={{ flexDirection: 'row', marginHorizontal: 10, justifyContent: 'space-between' }}>
+          <View style={styles.modalView}>
             <TouchableOpacity>
               <Text
-                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                style={styles.modalText}
                 onPress={() => {
                   setCurrentFile(null)
                   setIsImgModal(false)
@@ -932,7 +906,7 @@ const APP = () => {
             </TouchableOpacity>
             <TouchableOpacity>
               <Text
-                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                style={styles.modalText}
                 onPress={() => {
                   ActionSheetIOS.showActionSheetWithOptions(
                     {
@@ -957,7 +931,7 @@ const APP = () => {
               </Text>
             </TouchableOpacity>
           </View>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={styles.modalContainer}>
             {currentFile === null ? null : (
               <ImageZoom
                 cropWidth={Dimensions.get('window').width - 40}
@@ -965,7 +939,7 @@ const APP = () => {
                 imageWidth={Dimensions.get('window').width - 40}
                 imageHeight={Dimensions.get('window').height - 120}>
                 <Image
-                  style={{ width: '100%', height: '100%' }}
+                  style={styles.imageModalContent}
                   resizeMode={'contain'}
                   source={{ uri: currentFile?.uri }}
                   onLoadStart={() => setLoading(true)}
@@ -978,15 +952,8 @@ const APP = () => {
               </ImageZoom>
             )}
           </View>
-          {loading ? (
-            <View
-              style={{
-                backgroundColor: 'black',
-                position: 'absolute',
-                width: '100%',
-                height: '100%',
-                justifyContent: 'center',
-              }}>
+          {loading || videoLoading ? (
+            <View style={styles.loadingViewBlack}>
               <ActivityIndicator size={'large'} color="red" />
             </View>
           ) : null}
@@ -994,16 +961,16 @@ const APP = () => {
 
         <Modal
           isVisible={isVideoModal}
-          style={{ flex: 1, backgroundColor: 'black', paddingTop: 30 }}
+          style={styles.modal}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
             setCurrentFile(null)
             setIsVideoModal(false)
           }}>
-          <View style={{ flexDirection: 'row', marginHorizontal: 10, justifyContent: 'space-between' }}>
+          <View style={styles.modalView}>
             <TouchableOpacity>
               <Text
-                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                style={styles.modalText}
                 onPress={() => {
                   setCurrentFile(null)
                   setIsVideoModal(false)
@@ -1013,7 +980,7 @@ const APP = () => {
             </TouchableOpacity>
             <TouchableOpacity>
               <Text
-                style={{ color: 'white', fontSize: 30, fontWeight: 'bold' }}
+                style={styles.modalText}
                 onPress={() => {
                   ActionSheetIOS.showActionSheetWithOptions(
                     {
@@ -1038,53 +1005,31 @@ const APP = () => {
               </Text>
             </TouchableOpacity>
           </View>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={styles.modalContainer}>
             {currentFile === null ? null : (
               <Video
                 source={{ uri: currentFile?.uri }}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  right: 0,
-                }}
+                style={styles.videoModalContent}
                 controls={true}
                 fullscreen={true}
-                onLoadStart={() => setLoading(true)}
-                onLoad={() => setLoading(false)}
+                onLoadStart={() => setVideoLoading(true)}
+                onLoad={() => setVideoLoading(false)}
                 onError={error => {
                   console.log('error : ', error)
-                  setLoading(false)
+                  setVideoLoading(false)
                 }}
               />
             )}
           </View>
-          {loading ? (
-            <View
-              style={{
-                backgroundColor: 'black',
-                position: 'absolute',
-                width: '100%',
-                height: '100%',
-                justifyContent: 'center',
-              }}>
+          {loading || videoLoading ? (
+            <View style={styles.loadingViewBlack}>
               <ActivityIndicator size={'large'} color="red" />
             </View>
           ) : null}
         </Modal>
       </SafeAreaView>
-      {loading ? (
-        <View
-          style={{
-            position: 'absolute',
-            width: Dimensions.get('window').width,
-            height: Dimensions.get('window').height,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'gray',
-            opacity: 0.5,
-          }}>
+      {loading || videoLoading ? (
+        <View style={styles.mapLoadingView}>
           <ActivityIndicator size={'large'} color="red" />
         </View>
       ) : null}
@@ -1097,6 +1042,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  mapview: { flex: 1 },
   currentLocationContainer: {
     width: 40,
     height: 40,
@@ -1178,6 +1124,80 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 4,
     backgroundColor: 'gray',
+  },
+  preivew: { width: 125, height: 125 },
+  modifyContainer: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16 },
+  modify: { borderBottomWidth: 0.3, paddingBottom: 5, marginRight: 5 },
+  modifyText: { fontSize: 16 },
+  delete: { borderBottomWidth: 0.3, paddingBottom: 5 },
+  mapLoadingView: {
+    position: 'absolute',
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'gray',
+    opacity: 0.5,
+  },
+  loadingView: {
+    backgroundColor: 'white',
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+  },
+  loadingViewBlack: {
+    backgroundColor: 'black',
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+  },
+  fileView: { marginTop: 10, borderWidth: 1, borderColor: 'gray', marginRight: 5 },
+  fileAddView: { marginTop: 10, borderWidth: 1, borderColor: 'gray', width: 125, height: 125, justifyContent: 'center' },
+  plusText: { alignSelf: 'center', color: 'gray', fontSize: 30 },
+  bottomContent: {
+    backgroundColor: 'white',
+    padding: 16,
+    minHeight: '100%',
+  },
+  titleText: { borderBottomWidth: 0.3, alignSelf: 'center', width: '100%', fontSize: 22, paddingBottom: 8, fontWeight: 'bold' },
+  addressView: { flexDirection: 'row', marginTop: 10, justifyContent: 'space-between' },
+  addressViewContainer: { flexDirection: 'row' },
+  markerImage: {
+    width: 12,
+    height: 12,
+    alignSelf: 'center',
+    marginRight: 3,
+  },
+  addressText: { textAlign: 'center' },
+  dateView: { flexDirection: 'row', marginTop: 10, justifyContent: 'space-between' },
+  dateViewContainer: { borderBottomWidth: 0.3, alignSelf: 'center', paddingBottom: 5 },
+  detail: { borderWidth: 0.5, borderColor: 'gray', marginTop: 15, minHeight: 80, color: 'black', paddingVertical: 5, paddingHorizontal: 5 },
+  fileViewContainer: { flexDirection: 'row' },
+  dateModal: { flex: 1, justifyContent: 'center' },
+  datePicker: { width: '100%', backgroundColor: 'gray' },
+  dateModalView: {
+    width: '100%',
+    backgroundColor: 'gray',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: 0.5,
+    borderTopColor: 'white',
+    paddingTop: 10,
+  },
+  dateModalText: { color: 'white', fontSize: 20, fontWeight: 'bold', marginRight: 10, marginBottom: 5 },
+  modal: { flex: 1, backgroundColor: 'black', paddingTop: 30 },
+  modalView: { flexDirection: 'row', marginHorizontal: 10, justifyContent: 'space-between' },
+  modalText: { color: 'white', fontSize: 30, fontWeight: 'bold' },
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  imageModalContent: { width: '100%', height: '100%' },
+  videoModalContent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
   },
 })
 
