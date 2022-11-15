@@ -67,10 +67,13 @@ const APP = () => {
   const [isVideoModal, setIsVideoModal] = useState(false)
   const player = useRef(null)
   const [fileResponseList, setFileResponseList] = useState([])
+  const [listOpen, setListOpen] = useState(false)
+  const [isList, setIsList] = useState(false)
 
   const markerCollenction = firestore().collection('users')
 
   const sheetRef = useRef(null)
+  const placeListSheetRef = useRef(null)
 
   useEffect(() => {
     AppState.addEventListener('change', handleAppStateChange)
@@ -208,6 +211,11 @@ const APP = () => {
     return
   }
 
+  const _onPressList = () => {
+    setListOpen(true)
+    placeListSheetRef.current.snapTo(1)
+  }
+
   const _onPressCurrentLocation = () => {
     _getCurrentLocation()
   }
@@ -253,6 +261,7 @@ const APP = () => {
     setIsSearch(false)
     setFileResponseList([])
     sheetRef.current.snapTo(2)
+    placeListSheetRef.current.snapTo(2)
     setMarkerDatas(markerDatas.filter(v => v.save === true))
   }
 
@@ -282,6 +291,7 @@ const APP = () => {
     Keyboard.dismiss()
     setFileResponseList([])
     sheetRef.current.snapTo(2)
+    placeListSheetRef.current.snapTo(2)
 
     if (searchText === '') {
       return
@@ -514,7 +524,7 @@ const APP = () => {
           }}
           onLoad={() => {
             setVideoLoading(false)
-            player?.current.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
+            player?.current?.seek(0) // 로드가 완료되었을떄 첫 프레임이 썸네일처럼 보임
           }}
           onError={error => {
             console.log('error : ', error)
@@ -793,6 +803,133 @@ const APP = () => {
     )
   }
 
+  const _listRenderHeader = () => {
+    return (
+      <View style={styles.header}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHandle} />
+        </View>
+        <View style={styles.listContainer}>
+          <View style={styles.listView}>
+            <Text style={styles.listText}>장소 모아보기 </Text>
+            <Text style={styles.listText}>({markerDatas.filter(v => v.save === true).length})</Text>
+          </View>
+          <TouchableOpacity style={styles.listView}>
+            <Image style={styles.listFilterImage} source={require('./images/filter.png')} />
+            <Text style={styles.listText}> 필터</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
+  }
+
+  const _noDataView = () => {
+    return (
+      <View style={styles.noData}>
+        <Text>저장된 장소가 없습니다.</Text>
+      </View>
+    )
+  }
+
+  const _listRenderContent = () => {
+    let values = []
+    values = [...markerDatas]
+    values.sort((a, b) => {
+      if (new Date(a.time) > new Date(b.time)) return 1
+      else if (new Date(a.time) === new Date(b.time)) return 0
+      else return -1
+    })
+    return !listOpen || values.filter(v => v.save === true).length < 1 ? (
+      _noDataView()
+    ) : (
+      <View style={styles.bottomContent}>
+        <FlatList data={values} renderItem={_listRenderItem} indicatorStyle="black" keyExtractor={(item, index) => index.toString()} />
+        {loading || videoLoading ? (
+          <View
+            style={{
+              backgroundColor: 'white',
+              width: '100%',
+              height: '100%',
+              paddingTop: 150,
+            }}>
+            <ActivityIndicator size={'large'} color="red" />
+          </View>
+        ) : null}
+      </View>
+    )
+  }
+
+  const _listRenderItem = ({ item, index }) => {
+    const marker = {
+      coordinate: {
+        latitude: item.latitude,
+        longitude: item.longitude,
+      },
+      tag: item.tag,
+    }
+    return (
+      <View
+        style={{
+          backgroundColor: 'white',
+          marginVertical: 6,
+          borderBottomWidth: 2,
+          borderColor: 'lightgray',
+          paddingBottom: 15,
+        }}>
+        <TouchableOpacity
+          onPress={() => {
+            placeListSheetRef.current.snapTo(2)
+            _onMarkerSelect(marker)
+          }}>
+          <Text
+            style={{
+              color: 'black',
+              marginBottom: 8,
+              fontWeight: 'bold',
+              fontSize: 17,
+            }}>
+            {item.title}
+          </Text>
+          <Text
+            style={{
+              fontSize: 12,
+              color: 'gray',
+              marginBottom: 16,
+            }}>
+            {item.time}
+          </Text>
+          {item.detail === '' ? null : <Text style={{ marginBottom: 16 }}>{item.detail}</Text>}
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row' }}>
+          <ScrollView horizontal={true}>
+            {item.fileUrlList.length > 0
+              ? item.fileUrlList.map(file => {
+                  return (
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (file.type.includes('image')) {
+                          setIsImgModal(true)
+                          setIsList(true)
+                          setCurrentFile(file)
+                        } else {
+                          setIsVideoModal(true)
+                          setIsList(true)
+                          setCurrentFile(file)
+                        }
+                      }}
+                      style={{ borderWidth: 1, borderColor: 'gray', marginRight: 5 }}
+                      key={file.fileName}>
+                      {_preView(file)}
+                    </TouchableOpacity>
+                  )
+                })
+              : null}
+          </ScrollView>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -813,12 +950,20 @@ const APP = () => {
           }}
         />
         <TouchableOpacity
+          style={styles.listIconContainer}
+          activeOpacity={0.5}
+          onPress={() => {
+            _onPressList()
+          }}>
+          <Image style={styles.listIcon} source={require('./images/list.png')} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.currentLocationContainer}
           activeOpacity={0.5}
           onPress={() => {
             _onPressCurrentLocation()
           }}>
-          <Image style={styles.currentLoactionIcon} source={require('./images/gps.png')} />
+          <Image style={styles.currentLoactionIcon} source={require('./images/currentLocation.png')} />
         </TouchableOpacity>
         <View style={styles.searchBar}>
           <TextInput
@@ -839,6 +984,7 @@ const APP = () => {
             onFocus={() => {
               setFileResponseList([])
               sheetRef.current.snapTo(2)
+              placeListSheetRef.current.snapTo(2)
             }}
           />
           <TouchableWithoutFeedback onPress={_onSearch}>
@@ -892,6 +1038,7 @@ const APP = () => {
           onBackdropPress={() => {
             setCurrentFile(null)
             setIsImgModal(false)
+            setIsList(false)
           }}>
           <View style={styles.modalView}>
             <TouchableOpacity>
@@ -900,36 +1047,39 @@ const APP = () => {
                 onPress={() => {
                   setCurrentFile(null)
                   setIsImgModal(false)
+                  setIsList(false)
                 }}>
                 X
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity>
-              <Text
-                style={styles.modalText}
-                onPress={() => {
-                  ActionSheetIOS.showActionSheetWithOptions(
-                    {
-                      options: ['수정하기', '삭제하기', '취소'],
-                      cancelButtonIndex: 2,
-                    },
-                    buttonIndex => {
-                      if (buttonIndex === 0) {
-                        setIsImgModal(false)
-                        setTimeout(() => {
-                          _modalOpen()
-                        }, 500)
-                      } else if (buttonIndex === 1) {
-                        setFileResponseList(fileResponseList.filter(v => v.fileName !== currentFile.fileName))
-                        setCurrentFile(null)
-                        setIsImgModal(false)
-                      }
-                    },
-                  )
-                }}>
-                ...
-              </Text>
-            </TouchableOpacity>
+            {isList ? null : (
+              <TouchableOpacity>
+                <Text
+                  style={styles.modalText}
+                  onPress={() => {
+                    ActionSheetIOS.showActionSheetWithOptions(
+                      {
+                        options: ['수정하기', '삭제하기', '취소'],
+                        cancelButtonIndex: 2,
+                      },
+                      buttonIndex => {
+                        if (buttonIndex === 0) {
+                          setIsImgModal(false)
+                          setTimeout(() => {
+                            _modalOpen()
+                          }, 500)
+                        } else if (buttonIndex === 1) {
+                          setFileResponseList(fileResponseList.filter(v => v.fileName !== currentFile.fileName))
+                          setCurrentFile(null)
+                          setIsImgModal(false)
+                        }
+                      },
+                    )
+                  }}>
+                  ...
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <View style={styles.modalContainer}>
             {currentFile === null ? null : (
@@ -1034,6 +1184,14 @@ const APP = () => {
         </View>
       ) : null}
       <BottomSheet ref={sheetRef} snapPoints={['70%', '48%', 0]} initialSnap={2} renderHeader={_renderHeader} renderContent={_renderContent} />
+      <BottomSheet
+        ref={placeListSheetRef}
+        snapPoints={['80%', '48%', 0]}
+        initialSnap={2}
+        renderHeader={_listRenderHeader}
+        renderContent={_listRenderContent}
+        onCloseEnd={() => setListOpen(false)}
+      />
     </>
   )
 }
@@ -1043,16 +1201,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mapview: { flex: 1 },
-  currentLocationContainer: {
-    width: 40,
-    height: 40,
+  listIconContainer: {
+    width: 50,
+    height: 50,
     position: 'absolute',
     right: 12,
-    bottom: 55,
+    bottom: 120,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listIcon: {
+    width: 28,
+    height: 28,
+  },
+  currentLocationContainer: {
+    width: 50,
+    height: 50,
+    position: 'absolute',
+    right: 12,
+    bottom: 60,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   currentLoactionIcon: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
   },
   searchBar: {
     position: 'absolute',
@@ -1198,6 +1375,16 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     right: 0,
+  },
+  listContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16 },
+  listView: { flexDirection: 'row' },
+  listText: { fontSize: 16 },
+  listFilterImage: { width: 20, height: 20 },
+  noData: {
+    backgroundColor: 'white',
+    minHeight: '100%',
+    alignItems: 'center',
+    paddingTop: 150,
   },
 })
 
