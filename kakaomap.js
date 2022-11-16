@@ -33,6 +33,7 @@ MapView.propTypes = {
   markers: PropTypes.any,
   initialRegion: PropTypes.any,
   isTracking: PropTypes.bool,
+  selectPoiTag: PropTypes.string,
   onMapDragEnded: PropTypes.func,
   onMarkerSelect: PropTypes.func,
   onMapTouch: PropTypes.func,

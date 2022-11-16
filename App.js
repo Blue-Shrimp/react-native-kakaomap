@@ -69,6 +69,7 @@ const APP = () => {
   const [fileResponseList, setFileResponseList] = useState([])
   const [listOpen, setListOpen] = useState(false)
   const [isList, setIsList] = useState(false)
+  const [selectPoiTag, setSelectPoiTag] = useState('')
 
   const markerCollenction = firestore().collection('users')
 
@@ -231,6 +232,7 @@ const APP = () => {
 
   const _onMarkerSelect = event => {
     Keyboard.dismiss()
+    placeListSheetRef.current.snapTo(2)
     setIsSearch(false)
     const current = {
       latitude: event.coordinate.latitude,
@@ -387,7 +389,6 @@ const APP = () => {
     setLoading(true)
     try {
       const data = await markerCollenction.doc('ABC').get()
-      console.log(data?._data?.markerData)
       setMarkerDatas(data?._data?.markerData)
       setLoading(false)
     } catch (error) {
@@ -399,7 +400,6 @@ const APP = () => {
   const _uploadMarker = async markers => {
     try {
       await markerCollenction.doc('ABC').set({ markerData: markers })
-      console.log('Create Complete!')
     } catch (error) {
       console.log(error.message)
     }
@@ -554,7 +554,6 @@ const APP = () => {
   }
 
   const _onImageCamera = async () => {
-    console.log('fileResponseList : ', fileResponseList)
     setLoading(true)
     const options = {
       mediaType: 'photo',
@@ -598,7 +597,6 @@ const APP = () => {
   }
 
   const _onVideoCamera = async () => {
-    console.log('fileResponseList : ', fileResponseList)
     setLoading(true)
     const options = {
       mediaType: 'video',
@@ -641,7 +639,6 @@ const APP = () => {
   }
 
   const _onSelectImage = async () => {
-    console.log('fileResponseList : ', fileResponseList)
     setLoading(true)
     const options = {
       mediaType: 'mixed',
@@ -835,7 +832,7 @@ const APP = () => {
     let values = []
     values = [...markerDatas]
     values.sort((a, b) => {
-      if (new Date(a.time) > new Date(b.time)) return 1
+      if (new Date(a.time) < new Date(b.time)) return 1
       else if (new Date(a.time) === new Date(b.time)) return 0
       else return -1
     })
@@ -859,6 +856,10 @@ const APP = () => {
     )
   }
 
+  const _onPoiSelect = tag => {
+    setSelectPoiTag(tag)
+  }
+
   const _listRenderItem = ({ item, index }) => {
     const marker = {
       coordinate: {
@@ -874,11 +875,11 @@ const APP = () => {
           marginVertical: 6,
           borderBottomWidth: 2,
           borderColor: 'lightgray',
-          paddingBottom: 15,
         }}>
         <TouchableOpacity
           onPress={() => {
             placeListSheetRef.current.snapTo(2)
+            _onPoiSelect(item.tag)
             _onMarkerSelect(marker)
           }}>
           <Text
@@ -917,7 +918,7 @@ const APP = () => {
                           setCurrentFile(file)
                         }
                       }}
-                      style={{ borderWidth: 1, borderColor: 'gray', marginRight: 5 }}
+                      style={{ borderWidth: 1, borderColor: 'gray', marginRight: 5, marginBottom: 16 }}
                       key={file.fileName}>
                       {_preView(file)}
                     </TouchableOpacity>
@@ -937,6 +938,7 @@ const APP = () => {
         <MapView
           style={styles.mapview}
           isTracking={isTracking.current}
+          selectPoiTag={selectPoiTag}
           initialRegion={location}
           markers={markerDatas}
           onMapDragEnded={event => {
@@ -1183,7 +1185,14 @@ const APP = () => {
           <ActivityIndicator size={'large'} color="red" />
         </View>
       ) : null}
-      <BottomSheet ref={sheetRef} snapPoints={['70%', '48%', 0]} initialSnap={2} renderHeader={_renderHeader} renderContent={_renderContent} />
+      <BottomSheet
+        ref={sheetRef}
+        snapPoints={['70%', '48%', 0]}
+        initialSnap={2}
+        renderHeader={_renderHeader}
+        renderContent={_renderContent}
+        onCloseEnd={() => setSelectPoiTag('')}
+      />
       <BottomSheet
         ref={placeListSheetRef}
         snapPoints={['80%', '48%', 0]}

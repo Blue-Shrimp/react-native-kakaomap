@@ -89,6 +89,18 @@ RCT_CUSTOM_VIEW_PROPERTY(isTracking, NSBool , KakaoMapView)
     }
 }
 
+RCT_CUSTOM_VIEW_PROPERTY(selectPoiTag, NSString , KakaoMapView)
+{
+    NSString *tmp = @"";
+    RCTLogInfo(@"Pretending to create an event %@", json);
+    if ( [json isEqualToString:tmp] == NO ) {
+      MTMapPOIItem* selectMarker = [_mapView findPOIItemByTag:[json integerValue]];
+      RCTLogInfo(@"Pretending to create an event %@", selectMarker.itemName);
+      RCTLogInfo(@"Pretending to create an event %@", selectMarker.customSelectedImageName);
+      [_mapView selectPOIItem:selectMarker animated:NO];
+    }
+}
+
 // 지도 화면의 이동이 끝난 뒤 호출
 - (void)mapView:(MTMapView*)mapView finishedMapMoveAnimation:(MTMapPoint*)mapCenterPoint {
     id event = @{
