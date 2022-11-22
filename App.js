@@ -33,6 +33,7 @@ import storage from '@react-native-firebase/storage'
 import firestore from '@react-native-firebase/firestore'
 import ImageZoom from 'react-native-image-pan-zoom'
 import Video from 'react-native-video'
+import { RadioButton } from 'react-native-paper'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -70,6 +71,12 @@ const APP = () => {
   const [listOpen, setListOpen] = useState(false)
   const [isList, setIsList] = useState(false)
   const [selectPoiTag, setSelectPoiTag] = useState('')
+  const [isFilterModal, setIsFilterModal] = useState(false)
+  const [sortChecked, setSortChecked] = useState('latest')
+  const [sortValue, setSortValue] = useState('latest')
+  const [dateChecked, setDateChecked] = useState('all')
+  const [dateValue, setDateValue] = useState('all')
+  const isCheckingPermissions = useRef(false)
 
   const markerCollenction = firestore().collection('users')
 
@@ -87,7 +94,10 @@ const APP = () => {
 
   const handleAppStateChange = nextAppState => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-      _requestPermission()
+      if (isCheckingPermissions.current) {
+        _getCurrentLocation()
+      }
+      isCheckingPermissions.current = false
     }
     if (appState.current.match(/inactive|active/) && nextAppState === 'background') {
     }
@@ -169,6 +179,7 @@ const APP = () => {
           {
             text: '설정 이동',
             onPress: () => {
+              isCheckingPermissions.current = true
               openSettings()
               return Promise.reject(false)
             },
@@ -811,7 +822,7 @@ const APP = () => {
             <Text style={styles.listText}>장소 모아보기 </Text>
             <Text style={styles.listText}>({markerDatas.filter(v => v.save === true).length})</Text>
           </View>
-          <TouchableOpacity style={styles.listView}>
+          <TouchableOpacity style={styles.listView} onPress={() => setIsFilterModal(true)}>
             <Image style={styles.listFilterImage} source={require('./images/filter.png')} />
             <Text style={styles.listText}> 필터</Text>
           </TouchableOpacity>
@@ -831,24 +842,26 @@ const APP = () => {
   const _listRenderContent = () => {
     let values = []
     values = [...markerDatas]
-    values.sort((a, b) => {
-      if (new Date(a.time) < new Date(b.time)) return 1
-      else if (new Date(a.time) === new Date(b.time)) return 0
-      else return -1
-    })
+    if (sortValue === 'latest') {
+      values.sort((a, b) => {
+        if (new Date(a.time) < new Date(b.time)) return 1
+        else if (new Date(a.time) === new Date(b.time)) return 0
+        else return -1
+      })
+    } else {
+      values.sort((a, b) => {
+        if (new Date(a.time) > new Date(b.time)) return 1
+        else if (new Date(a.time) === new Date(b.time)) return 0
+        else return -1
+      })
+    }
     return !listOpen || values.filter(v => v.save === true).length < 1 ? (
       _noDataView()
     ) : (
       <View style={styles.bottomContent}>
         <FlatList data={values} renderItem={_listRenderItem} indicatorStyle="black" keyExtractor={(item, index) => index.toString()} />
         {loading || videoLoading ? (
-          <View
-            style={{
-              backgroundColor: 'white',
-              width: '100%',
-              height: '100%',
-              paddingTop: 150,
-            }}>
+          <View style={styles.listLoadingView}>
             <ActivityIndicator size={'large'} color="red" />
           </View>
         ) : null}
@@ -869,39 +882,18 @@ const APP = () => {
       tag: item.tag,
     }
     return (
-      <View
-        style={{
-          backgroundColor: 'white',
-          marginVertical: 6,
-          borderBottomWidth: 2,
-          borderColor: 'lightgray',
-        }}>
+      <View style={styles.listItemContainer}>
         <TouchableOpacity
           onPress={() => {
             placeListSheetRef.current.snapTo(2)
             _onPoiSelect(item.tag)
             _onMarkerSelect(marker)
           }}>
-          <Text
-            style={{
-              color: 'black',
-              marginBottom: 8,
-              fontWeight: 'bold',
-              fontSize: 17,
-            }}>
-            {item.title}
-          </Text>
-          <Text
-            style={{
-              fontSize: 12,
-              color: 'gray',
-              marginBottom: 16,
-            }}>
-            {item.time}
-          </Text>
-          {item.detail === '' ? null : <Text style={{ marginBottom: 16 }}>{item.detail}</Text>}
+          <Text style={styles.listTitleText}>{item.title}</Text>
+          <Text style={styles.listTimeText}>{item.time}</Text>
+          {item.detail === '' ? null : <Text style={styles.listDetailText}>{item.detail}</Text>}
         </TouchableOpacity>
-        <View style={{ flexDirection: 'row' }}>
+        <View style={styles.listFileView}>
           <ScrollView horizontal={true}>
             {item.fileUrlList.length > 0
               ? item.fileUrlList.map(file => {
@@ -918,7 +910,7 @@ const APP = () => {
                           setCurrentFile(file)
                         }
                       }}
-                      style={{ borderWidth: 1, borderColor: 'gray', marginRight: 5, marginBottom: 16 }}
+                      style={styles.listFileItem}
                       key={file.fileName}>
                       {_preView(file)}
                     </TouchableOpacity>
@@ -1179,6 +1171,67 @@ const APP = () => {
             </View>
           ) : null}
         </Modal>
+        <Modal
+          isVisible={isFilterModal}
+          style={styles.filterModal}
+          backdropTransitionOutTiming={0}
+          onBackdropPress={() => {
+            setIsFilterModal(false)
+            setSortChecked(sortValue)
+            setDateChecked(dateValue)
+          }}>
+          <View style={styles.filterModalView}>
+            <View style={styles.filterModalContainer}>
+              <Text style={styles.filterText}>장소 모아보기 필터</Text>
+              <View style={styles.filterSortView}>
+                <Text style={styles.filterSubText}>정렬 순서</Text>
+                <RadioButton.Group onValueChange={newValue => setSortChecked(newValue)} value={sortChecked}>
+                  <View style={styles.filterInnerView}>
+                    <RadioButton value="latest" uncheckedColor={'red'} />
+                    <Text>최신순</Text>
+                  </View>
+                  <View style={styles.filterInnerView}>
+                    <RadioButton value="older" uncheckedColor={'red'} />
+                    <Text>오래된순</Text>
+                  </View>
+                </RadioButton.Group>
+              </View>
+              <View>
+                <Text style={styles.filterSubText}>날짜 범위</Text>
+                <RadioButton.Group onValueChange={newValue => setDateChecked(newValue)} value={dateChecked}>
+                  <View style={styles.filterInnerView}>
+                    <RadioButton value="all" uncheckedColor={'red'} />
+                    <Text>전체</Text>
+                  </View>
+                  <View style={styles.filterInnerView}>
+                    <RadioButton value="set" uncheckedColor={'red'} />
+                    <Text>날짜지정</Text>
+                  </View>
+                </RadioButton.Group>
+              </View>
+            </View>
+            <View style={styles.filterButtonView}>
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => {
+                  setIsFilterModal(false)
+                  setSortChecked(sortValue)
+                  setDateChecked(dateValue)
+                }}>
+                <Text>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => {
+                  setIsFilterModal(false)
+                  setSortValue(sortChecked)
+                  setDateValue(dateChecked)
+                }}>
+                <Text>확인</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
       {loading || videoLoading ? (
         <View style={styles.mapLoadingView}>
@@ -1395,6 +1448,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 150,
   },
+  listLoadingView: {
+    backgroundColor: 'white',
+    width: '100%',
+    height: '100%',
+    paddingTop: 150,
+  },
+  listItemContainer: {
+    backgroundColor: 'white',
+    marginVertical: 6,
+    borderBottomWidth: 2,
+    borderColor: 'lightgray',
+  },
+  listTitleText: {
+    color: 'black',
+    marginBottom: 8,
+    fontWeight: 'bold',
+    fontSize: 17,
+  },
+  listTimeText: {
+    fontSize: 12,
+    color: 'gray',
+    marginBottom: 16,
+  },
+  listDetailText: { marginBottom: 16 },
+  listFileView: { flexDirection: 'row' },
+  listFileItem: { borderWidth: 1, borderColor: 'gray', marginRight: 5, marginBottom: 16 },
+  filterModal: { justifyContent: 'center', alignItems: 'center' },
+  filterModalView: { backgroundColor: 'white', width: '80%' },
+  filterModalContainer: { padding: 30 },
+  filterText: { fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
+  filterSortView: { marginBottom: 20 },
+  filterSubText: { fontSize: 16, fontWeight: 'bold' },
+  filterInnerView: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
+  filterButton: { paddingRight: 10 },
 })
 
 export default APP
