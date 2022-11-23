@@ -57,7 +57,7 @@ const APP = () => {
   const [markerDatas, setMarkerDatas] = useState([])
   const [searchPlace, setSearchPlace] = useState({})
   const [titleText, setTitleText] = useState('')
-  const [isModalVisible, setModalVisible] = useState(false)
+  const [isMarkerDateModal, setIsMarkerDateModal] = useState(false)
   const [pickerDate, setPickerDate] = useState(new Date().toISOString().substring(0, 10))
   const [markerDate, setMarkerDate] = useState(new Date().toISOString().substring(0, 10))
   const [detailText, setDetailText] = useState('')
@@ -77,6 +77,15 @@ const APP = () => {
   const [dateChecked, setDateChecked] = useState('all')
   const [dateValue, setDateValue] = useState('all')
   const isCheckingPermissions = useRef(false)
+  const [applyStartDate, setApplyStartDate] = useState(new Date().toISOString().substring(0, 10))
+  const [startDate, setStartDate] = useState(new Date().toISOString().substring(0, 10))
+  const [startPicker, setStartPicker] = useState(new Date().toISOString().substring(0, 10))
+  const [applyEndDate, setApplyEndDate] = useState(new Date().toISOString().substring(0, 10))
+  const [endDate, setEndDate] = useState(new Date().toISOString().substring(0, 10))
+  const [endPicker, setEndPicker] = useState(new Date().toISOString().substring(0, 10))
+  const [isFilterStartModal, setIsFilterStartModal] = useState(false)
+  const [isFilterEndModal, setIsFilterEndModal] = useState(false)
+  const [filterCnt, setFilterCnt] = useState(0)
 
   const markerCollenction = firestore().collection('users')
 
@@ -785,7 +794,7 @@ const APP = () => {
           <Text>방문일자</Text>
           <TouchableOpacity
             onPress={() => {
-              setModalVisible(true)
+              setIsMarkerDateModal(true)
             }}
             style={styles.dateViewContainer}>
             <Text>{markerDate}</Text>
@@ -820,11 +829,14 @@ const APP = () => {
         <View style={styles.listContainer}>
           <View style={styles.listView}>
             <Text style={styles.listText}>장소 모아보기 </Text>
-            <Text style={styles.listText}>({markerDatas.filter(v => v.save === true).length})</Text>
+            <Text style={styles.listText}>({filterCnt})</Text>
           </View>
           <TouchableOpacity style={styles.listView} onPress={() => setIsFilterModal(true)}>
-            <Image style={styles.listFilterImage} source={require('./images/filter.png')} />
-            <Text style={styles.listText}> 필터</Text>
+            <Image
+              style={styles.listFilterImage}
+              source={sortValue !== 'latest' || dateValue !== 'all' ? require('./images/applyFilter.png') : require('./images/filter.png')}
+            />
+            <Text style={sortValue !== 'latest' || dateValue !== 'all' ? styles.listApplyText : styles.listText}> 필터</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -842,6 +854,9 @@ const APP = () => {
   const _listRenderContent = () => {
     let values = []
     values = [...markerDatas]
+    if (dateValue === 'set') {
+      values = values.filter(v => new Date(v.time) >= new Date(applyStartDate) && new Date(v.time) <= new Date(applyEndDate))
+    }
     if (sortValue === 'latest') {
       values.sort((a, b) => {
         if (new Date(a.time) < new Date(b.time)) return 1
@@ -855,6 +870,7 @@ const APP = () => {
         else return -1
       })
     }
+    setFilterCnt(values.filter(v => v.save === true).length)
     return !listOpen || values.filter(v => v.save === true).length < 1 ? (
       _noDataView()
     ) : (
@@ -991,11 +1007,11 @@ const APP = () => {
           <FlatList data={place} renderItem={_renderItem} indicatorStyle="black"></FlatList>
         </View>
         <Modal
-          isVisible={isModalVisible}
+          isVisible={isMarkerDateModal}
           style={styles.dateModal}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
-            setModalVisible(false)
+            setIsMarkerDateModal(false)
             setPickerDate(markerDate)
           }}>
           <DatePicker
@@ -1011,14 +1027,14 @@ const APP = () => {
           <View style={styles.dateModalView}>
             <TouchableOpacity
               onPress={() => {
-                setModalVisible(false)
+                setIsMarkerDateModal(false)
                 setPickerDate(markerDate)
               }}>
               <Text style={styles.dateModalText}>취소</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
-                setModalVisible(false)
+                setIsMarkerDateModal(false)
                 setMarkerDate(pickerDate)
               }}>
               <Text style={styles.dateModalText}>확인</Text>
@@ -1179,6 +1195,10 @@ const APP = () => {
             setIsFilterModal(false)
             setSortChecked(sortValue)
             setDateChecked(dateValue)
+            setStartDate(applyStartDate)
+            setEndDate(applyEndDate)
+            setStartPicker(applyStartDate)
+            setEndPicker(applyEndDate)
           }}>
           <View style={styles.filterModalView}>
             <View style={styles.filterModalContainer}>
@@ -1207,6 +1227,24 @@ const APP = () => {
                     <RadioButton value="set" uncheckedColor={'red'} />
                     <Text>날짜지정</Text>
                   </View>
+                  <View style={styles.filterDate}>
+                    <TouchableOpacity
+                      style={styles.filterStartDate}
+                      disabled={dateChecked === 'set' ? false : true}
+                      onPress={() => {
+                        setIsFilterStartModal(true)
+                      }}>
+                      <Text style={dateChecked === 'set' ? styles.filterApplyText : styles.filterDisabledText}>시작일: </Text>
+                      <Text style={dateChecked === 'set' ? styles.filterApplyText : styles.filterDisabledText}>{startDate} </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.filterEndDate}
+                      disabled={dateChecked === 'set' ? false : true}
+                      onPress={() => setIsFilterEndModal(true)}>
+                      <Text style={dateChecked === 'set' ? styles.filterApplyText : styles.filterDisabledText}>종료일: </Text>
+                      <Text style={dateChecked === 'set' ? styles.filterApplyText : styles.filterDisabledText}>{endDate} </Text>
+                    </TouchableOpacity>
+                  </View>
                 </RadioButton.Group>
               </View>
             </View>
@@ -1217,6 +1255,10 @@ const APP = () => {
                   setIsFilterModal(false)
                   setSortChecked(sortValue)
                   setDateChecked(dateValue)
+                  setStartDate(applyStartDate)
+                  setEndDate(applyEndDate)
+                  setStartPicker(applyStartDate)
+                  setEndPicker(applyEndDate)
                 }}>
                 <Text>취소</Text>
               </TouchableOpacity>
@@ -1226,11 +1268,58 @@ const APP = () => {
                   setIsFilterModal(false)
                   setSortValue(sortChecked)
                   setDateValue(dateChecked)
+                  if (dateChecked === 'set') {
+                    setApplyStartDate(startDate)
+                    setApplyEndDate(endDate)
+                  } else {
+                    setStartDate(new Date().toISOString().substring(0, 10))
+                    setEndDate(new Date().toISOString().substring(0, 10))
+                    setStartPicker(new Date().toISOString().substring(0, 10))
+                    setEndPicker(new Date().toISOString().substring(0, 10))
+                  }
                 }}>
                 <Text>확인</Text>
               </TouchableOpacity>
             </View>
           </View>
+          <Modal
+            isVisible={isFilterStartModal || isFilterEndModal}
+            style={styles.dateModal}
+            backdropTransitionOutTiming={0}
+            onBackdropPress={() => {
+              setIsFilterStartModal(false)
+              setIsFilterEndModal(false)
+              isFilterStartModal ? setStartPicker(startDate) : setEndPicker(endDate)
+            }}>
+            <DatePicker
+              style={styles.datePicker}
+              date={isFilterStartModal ? new Date(startPicker) : new Date(endPicker)}
+              mode="date"
+              use12Hours
+              maximumDate={new Date()}
+              onDateChange={date => {
+                isFilterStartModal ? setStartPicker(date.toISOString().substring(0, 10)) : setEndPicker(date.toISOString().substring(0, 10))
+              }}
+            />
+            <View style={styles.dateModalView}>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsFilterStartModal(false)
+                  setIsFilterEndModal(false)
+                  isFilterStartModal ? setStartPicker(startDate) : setEndPicker(endDate)
+                }}>
+                <Text style={styles.dateModalText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsFilterStartModal(false)
+                  setIsFilterEndModal(false)
+                  isFilterStartModal ? setStartDate(startPicker) : setEndDate(endPicker)
+                }}>
+                <Text style={styles.dateModalText}>확인</Text>
+              </TouchableOpacity>
+            </View>
+          </Modal>
         </Modal>
       </SafeAreaView>
       {loading || videoLoading ? (
@@ -1440,6 +1529,7 @@ const styles = StyleSheet.create({
   },
   listContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16 },
   listView: { flexDirection: 'row' },
+  listApplyText: { color: 'red', fontSize: 16 },
   listText: { fontSize: 16 },
   listFilterImage: { width: 20, height: 20 },
   noData: {
@@ -1486,6 +1576,11 @@ const styles = StyleSheet.create({
   },
   filterButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
   filterButton: { paddingRight: 10 },
+  filterDate: { marginLeft: 35, marginTop: 5 },
+  filterStartDate: { flexDirection: 'row', marginBottom: 8 },
+  filterEndDate: { flexDirection: 'row' },
+  filterApplyText: { fontWeight: 'bold' },
+  filterDisabledText: { color: 'gray' },
 })
 
 export default APP
