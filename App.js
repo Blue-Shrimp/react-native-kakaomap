@@ -34,6 +34,7 @@ import firestore from '@react-native-firebase/firestore'
 import ImageZoom from 'react-native-image-pan-zoom'
 import Video from 'react-native-video'
 import { RadioButton } from 'react-native-paper'
+import { CalendarProvider, ExpandableCalendar, AgendaList } from 'react-native-calendars'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -86,6 +87,8 @@ const APP = () => {
   const [isFilterStartModal, setIsFilterStartModal] = useState(false)
   const [isFilterEndModal, setIsFilterEndModal] = useState(false)
   const [filterCnt, setFilterCnt] = useState(0)
+  const [isCalendarModal, setIsCalendarModal] = useState(false)
+  const today = new Date().toISOString().split('T')[0]
 
   const markerCollenction = firestore().collection('users')
 
@@ -409,7 +412,7 @@ const APP = () => {
     setLoading(true)
     try {
       const data = await markerCollenction.doc('ABC').get()
-      setMarkerDatas(data?._data?.markerData)
+      setMarkerDatas(data?._data?.markerData || [])
       setLoading(false)
     } catch (error) {
       setLoading(false)
@@ -939,6 +942,66 @@ const APP = () => {
     )
   }
 
+  const onDateChanged = date => {}
+
+  const _agendaItem = item => {
+    console.log('item : ', item)
+    return (
+      <TouchableOpacity>
+        <Text>{item?.item.title}</Text>
+        <Text>{item?.item.address}</Text>
+      </TouchableOpacity>
+    )
+  }
+
+  const getTheme = () => {
+    const disabledColor = 'grey'
+
+    return {
+      'stylesheet.calendar.header': {
+        dayTextAtIndex5: { color: 'blue' },
+        dayTextAtIndex6: { color: 'red' },
+        week: {
+          marginTop: 5,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+        },
+      },
+
+      // arrows
+      arrowColor: 'black',
+      arrowStyle: { padding: 0 },
+      // month
+      monthTextColor: 'black',
+      textMonthFontSize: 16,
+      textMonthFontFamily: 'HelveticaNeue',
+      textMonthFontWeight: 'bold',
+      // day names
+      textSectionTitleColor: 'black',
+      textDayHeaderFontSize: 12,
+      textDayHeaderFontFamily: 'HelveticaNeue',
+      textDayHeaderFontWeight: 'normal',
+      // dates
+      dayTextColor: 'gray',
+      textDayFontSize: 12,
+      textDayFontFamily: 'HelveticaNeue',
+      textDayFontWeight: '500',
+      textDayStyle: { marginTop: 8 },
+      // selected date
+      selectedDayBackgroundColor: '#00AAAF',
+      selectedDayTextColor: 'white',
+      // disabled date
+      textDisabledColor: disabledColor,
+      // dot (marked date)
+      dotColor: '#00AAAF',
+      selectedDotColor: 'white',
+      disabledDotColor: disabledColor,
+      dotStyle: { marginTop: 2 }, // -2
+    }
+  }
+
+  console.log(markerDatas)
+
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -959,6 +1022,14 @@ const APP = () => {
             _onMapTouch(event)
           }}
         />
+        <TouchableOpacity
+          style={styles.calendarIconContainer}
+          activeOpacity={0.5}
+          onPress={() => {
+            setIsCalendarModal(true)
+          }}>
+          <Image style={styles.calendarIcon} source={require('./images/calendar.png')} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.listIconContainer}
           activeOpacity={0.5}
@@ -1006,6 +1077,60 @@ const APP = () => {
         <View style={isSearch ? styles.placeListContainer : { display: 'none' }}>
           <FlatList data={place} renderItem={_renderItem} indicatorStyle="black"></FlatList>
         </View>
+        <Modal
+          isVisible={isCalendarModal}
+          style={{ left: -20, width: Dimensions.get('window').width, height: Dimensions.get('window').height - 10 }}
+          backdropTransitionOutTiming={0}
+          onBackdropPress={() => {
+            setIsCalendarModal(false)
+          }}>
+          <View
+            style={{
+              width: '100%',
+              backgroundColor: 'white',
+              marginTop: 25,
+            }}>
+            <TouchableOpacity
+              onPress={() => {
+                setIsCalendarModal(false)
+              }}>
+              <Text style={{ color: 'black', fontSize: 20, fontWeight: 'bold', marginLeft: 10, marginBottom: 5 }}>X</Text>
+            </TouchableOpacity>
+          </View>
+          <CalendarProvider date={today} onDateChanged={onDateChanged} showTodayButton={false}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
+              <ExpandableCalendar
+                initialPosition={ExpandableCalendar.positions.OPEN}
+                firstDay={1}
+                markedDates={{
+                  '2022-12-15': { marked: true, dotColor: '#50cebb' },
+                  '2022-12-16': { marked: true, dotColor: '#50cebb' },
+                }}
+                theme={getTheme()}
+                // leftArrowImageSource={leftArrowIcon}
+                // rightArrowImageSource={rightArrowIcon}
+              />
+              <AgendaList
+                theme={{ calendarBackground: 'white' }}
+                sections={[
+                  {
+                    title: new Date('2022-12-15').toISOString().split('T')[0],
+                    data: [{ title: 'First Yoga', address: 'test' }],
+                  },
+                  {
+                    title: new Date('2022-12-16').toISOString().split('T')[0],
+                    data: [{ title: 'First Yoga', address: 'test' }],
+                  },
+                ]}
+                renderItem={_agendaItem}
+                sectionStyle={{
+                  color: 'black',
+                  textTransform: 'capitalize',
+                }}
+              />
+            </SafeAreaView>
+          </CalendarProvider>
+        </Modal>
         <Modal
           isVisible={isMarkerDateModal}
           style={styles.dateModal}
@@ -1352,6 +1477,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mapview: { flex: 1 },
+  calendarIconContainer: {
+    width: 50,
+    height: 50,
+    position: 'absolute',
+    right: 12,
+    bottom: 180,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarIcon: {
+    width: 32,
+    height: 32,
+  },
   listIconContainer: {
     width: 50,
     height: 50,
