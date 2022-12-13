@@ -34,10 +34,19 @@ import firestore from '@react-native-firebase/firestore'
 import ImageZoom from 'react-native-image-pan-zoom'
 import Video from 'react-native-video'
 import { RadioButton } from 'react-native-paper'
-import { CalendarProvider, ExpandableCalendar, AgendaList } from 'react-native-calendars'
+import { CalendarProvider, ExpandableCalendar, AgendaList, LocaleConfig } from 'react-native-calendars'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
+
+LocaleConfig.locales['kr'] = {
+  monthNames: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],
+  monthNamesShort: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],
+  dayNames: ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'],
+  dayNamesShort: ['일', '월', '화', '수', '목', '금', '토'],
+  today: '오늘',
+}
+LocaleConfig.defaultLocale = 'kr'
 
 const APP = () => {
   const appState = useRef(AppState.currentState)
@@ -89,6 +98,8 @@ const APP = () => {
   const [filterCnt, setFilterCnt] = useState(0)
   const [isCalendarModal, setIsCalendarModal] = useState(false)
   const today = new Date().toISOString().split('T')[0]
+  const [agendaData, setAgendaData] = useState([])
+  const [calendarMarked, setCalendarMarked] = useState({})
 
   const markerCollenction = firestore().collection('users')
 
@@ -103,6 +114,14 @@ const APP = () => {
       AppState.removeEventListener('change', handleAppStateChange)
     }
   }, [])
+
+  useEffect(() => {
+    let marked = {}
+    markerDatas.map(value => {
+      marked = { ...marked, [value?.time]: { marked: true, dotColor: '#50cebb' } }
+    })
+    setCalendarMarked(marked)
+  }, [markerDatas])
 
   const handleAppStateChange = nextAppState => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
@@ -942,16 +961,60 @@ const APP = () => {
     )
   }
 
-  const onDateChanged = date => {}
+  const agendaDataRequest = date => {
+    let agenda = [
+      {
+        title: date,
+        data: [],
+      },
+    ]
+    markerDatas.map(value => {
+      if (date === value?.time) {
+        const object = { ...value }
+        agenda[0].data.push(object)
+      }
+    })
+
+    if (agenda[0].data.length === 0) {
+      agenda = [
+        {
+          title: date,
+          data: [{ title: '추억이 없습니다.' }],
+        },
+      ]
+    }
+    setAgendaData(agenda)
+  }
+
+  const onDateChanged = date => {
+    agendaDataRequest(date)
+  }
 
   const _agendaItem = item => {
-    console.log('item : ', item)
-    return (
-      <TouchableOpacity>
-        <Text>{item?.item.title}</Text>
-        <Text>{item?.item.address}</Text>
-      </TouchableOpacity>
-    )
+    console.log(item?.item)
+    const marker = {
+      coordinate: {
+        latitude: item?.item.latitude,
+        longitude: item?.item.longitude,
+      },
+      tag: item?.item.tag,
+    }
+    if (item?.item?.tag === undefined) {
+      return <Text style={styles.agendaNoText}>{item?.item.title}</Text>
+    } else {
+      return (
+        <TouchableOpacity
+          style={styles.agendaView}
+          onPress={() => {
+            _onPoiSelect(item?.item.tag)
+            _onMarkerSelect(marker)
+            setIsCalendarModal(false)
+          }}>
+          <Text style={styles.agendaViewTitle}>{item?.item?.title}</Text>
+          <Text style={styles.agendaViewAddress}>{item?.item?.info?.address}</Text>
+        </TouchableOpacity>
+      )
+    }
   }
 
   const getTheme = () => {
@@ -961,11 +1024,6 @@ const APP = () => {
       'stylesheet.calendar.header': {
         dayTextAtIndex5: { color: 'blue' },
         dayTextAtIndex6: { color: 'red' },
-        week: {
-          marginTop: 5,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-        },
       },
 
       // arrows
@@ -1000,8 +1058,6 @@ const APP = () => {
     }
   }
 
-  console.log(markerDatas)
-
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -1027,6 +1083,7 @@ const APP = () => {
           activeOpacity={0.5}
           onPress={() => {
             setIsCalendarModal(true)
+            agendaDataRequest(new Date().toISOString().split('T')[0])
           }}>
           <Image style={styles.calendarIcon} source={require('./images/calendar.png')} />
         </TouchableOpacity>
@@ -1079,54 +1136,35 @@ const APP = () => {
         </View>
         <Modal
           isVisible={isCalendarModal}
-          style={{ left: -20, width: Dimensions.get('window').width, height: Dimensions.get('window').height - 10 }}
+          style={styles.calendarModal}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
             setIsCalendarModal(false)
           }}>
-          <View
-            style={{
-              width: '100%',
-              backgroundColor: 'white',
-              marginTop: 25,
-            }}>
+          <View style={styles.calendarModalView}>
             <TouchableOpacity
               onPress={() => {
                 setIsCalendarModal(false)
               }}>
-              <Text style={{ color: 'black', fontSize: 20, fontWeight: 'bold', marginLeft: 10, marginBottom: 5 }}>X</Text>
+              <Text style={styles.calendarModalClose}>X</Text>
             </TouchableOpacity>
           </View>
-          <CalendarProvider date={today} onDateChanged={onDateChanged} showTodayButton={false}>
-            <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
+          <CalendarProvider date={today} onDateChanged={onDateChanged} showTodayButton={true}>
+            <SafeAreaView style={styles.calendarView}>
               <ExpandableCalendar
+                disablePan={true}
+                hideKnob={true}
                 initialPosition={ExpandableCalendar.positions.OPEN}
                 firstDay={1}
-                markedDates={{
-                  '2022-12-15': { marked: true, dotColor: '#50cebb' },
-                  '2022-12-16': { marked: true, dotColor: '#50cebb' },
-                }}
+                markedDates={calendarMarked}
                 theme={getTheme()}
-                // leftArrowImageSource={leftArrowIcon}
-                // rightArrowImageSource={rightArrowIcon}
               />
               <AgendaList
                 theme={{ calendarBackground: 'white' }}
-                sections={[
-                  {
-                    title: new Date('2022-12-15').toISOString().split('T')[0],
-                    data: [{ title: 'First Yoga', address: 'test' }],
-                  },
-                  {
-                    title: new Date('2022-12-16').toISOString().split('T')[0],
-                    data: [{ title: 'First Yoga', address: 'test' }],
-                  },
-                ]}
+                sections={agendaData}
                 renderItem={_agendaItem}
-                sectionStyle={{
-                  color: 'black',
-                  textTransform: 'capitalize',
-                }}
+                sectionStyle={styles.agendaSection}
+                dayFormat={'dddd, MM월 dd일'}
               />
             </SafeAreaView>
           </CalendarProvider>
@@ -1721,6 +1759,38 @@ const styles = StyleSheet.create({
   filterEndDate: { flexDirection: 'row' },
   filterApplyText: { fontWeight: 'bold' },
   filterDisabledText: { color: 'gray' },
+  agendaNoText: {
+    fontSize: 12,
+    color: 'gray',
+    marginBottom: 16,
+    marginHorizontal: 20,
+    marginVertical: 10,
+  },
+  agendaView: { marginHorizontal: 20, marginVertical: 10, borderBottomWidth: 2, borderColor: 'lightgray' },
+  agendaViewTitle: {
+    color: 'black',
+    marginBottom: 8,
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  agendaViewAddress: {
+    fontSize: 12,
+    color: 'gray',
+    marginBottom: 16,
+  },
+  calendarModal: { left: -20, width: Dimensions.get('window').width, height: Dimensions.get('window').height - 10 },
+  calendarModalView: {
+    width: '100%',
+    backgroundColor: 'white',
+    marginTop: 25,
+  },
+  calendarModalClose: { color: 'black', fontSize: 30, fontWeight: 'bold', marginLeft: 10, marginBottom: 5 },
+  calendarView: { flex: 1, backgroundColor: 'white' },
+  agendaSection: {
+    color: 'black',
+    textTransform: 'capitalize',
+    fontSize: 18,
+  },
 })
 
 export default APP
