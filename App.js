@@ -35,6 +35,7 @@ import ImageZoom from 'react-native-image-pan-zoom'
 import Video from 'react-native-video'
 import { RadioButton } from 'react-native-paper'
 import { CalendarProvider, ExpandableCalendar, AgendaList, LocaleConfig } from 'react-native-calendars'
+import { login, logout, getProfile as getKakaoProfile, unlink, getAccessToken } from '@react-native-seoul/kakao-login'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -100,6 +101,8 @@ const APP = () => {
   const today = new Date().toISOString().split('T')[0]
   const [agendaData, setAgendaData] = useState([])
   const [calendarMarked, setCalendarMarked] = useState({})
+  const [isLoginModal, setIsLoginModal] = useState(false)
+  const [kakaoResult, setKakaoResult] = useState('')
 
   const markerCollenction = firestore().collection('users')
 
@@ -122,6 +125,56 @@ const APP = () => {
     })
     setCalendarMarked(marked)
   }, [markerDatas])
+
+  const signInWithKakao = async () => {
+    try {
+      const token = await login()
+      console.log('token : ', JSON.stringify(token))
+      setKakaoResult(JSON.stringify(token))
+    } catch (err) {
+      console.error('login err', err)
+    }
+  }
+
+  const signOutWithKakao = async () => {
+    try {
+      const message = await logout()
+
+      setKakaoResult(message)
+    } catch (err) {
+      console.error('signOut error', err)
+    }
+  }
+
+  const getProfile = async () => {
+    try {
+      const profile = await getKakaoProfile()
+      console.log('profile : ', JSON.stringify(profile))
+      setKakaoResult(JSON.stringify(profile))
+    } catch (err) {
+      console.error('signOut error', err)
+    }
+  }
+
+  const getToken = async () => {
+    try {
+      const token = await getAccessToken()
+      console.log('token : ', token)
+      setKakaoResult(JSON.stringify(token))
+    } catch (err) {
+      console.error('accessToken error', err)
+    }
+  }
+
+  const unlinkKakao = async () => {
+    try {
+      const message = await unlink()
+
+      setKakaoResult(message)
+    } catch (err) {
+      console.error('signOut error', err)
+    }
+  }
 
   const handleAppStateChange = nextAppState => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
@@ -1079,6 +1132,14 @@ const APP = () => {
           }}
         />
         <TouchableOpacity
+          style={styles.loginIconContainer}
+          activeOpacity={0.5}
+          onPress={() => {
+            setIsLoginModal(true)
+          }}>
+          {/* <Image style={styles.calendarIcon} source={require('./images/calendar.png')} /> */}
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.calendarIconContainer}
           activeOpacity={0.5}
           onPress={() => {
@@ -1135,6 +1196,43 @@ const APP = () => {
           <FlatList data={place} renderItem={_renderItem} indicatorStyle="black"></FlatList>
         </View>
         <Modal
+          isVisible={isLoginModal}
+          backdropTransitionOutTiming={0}
+          onBackdropPress={() => {
+            setIsLoginModal(false)
+          }}>
+          <View style={styles.kakaoModal}>
+            <TouchableOpacity
+              onPress={() => {
+                setIsLoginModal(false)
+              }}>
+              <Text style={styles.modalClose}>X</Text>
+            </TouchableOpacity>
+            <View style={styles.kakaoContainer}>
+              <Text>{kakaoResult}</Text>
+              <TouchableOpacity
+                style={styles.kakaoButton}
+                onPress={() => {
+                  signInWithKakao()
+                }}>
+                <Text style={styles.kakaoText}>카카오 로그인</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kakaoButton} onPress={() => getProfile()}>
+                <Text style={styles.kakaoText}>프로필 조회</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kakaoButton} onPress={() => getToken()}>
+                <Text style={styles.kakaoText}>토큰 조회</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kakaoButton} onPress={() => unlinkKakao()}>
+                <Text style={styles.kakaoText}>링크 해제</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kakaoButton} onPress={() => signOutWithKakao()}>
+                <Text style={styles.kakaoText}>카카오 로그아웃</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        <Modal
           isVisible={isCalendarModal}
           style={styles.calendarModal}
           backdropTransitionOutTiming={0}
@@ -1146,7 +1244,7 @@ const APP = () => {
               onPress={() => {
                 setIsCalendarModal(false)
               }}>
-              <Text style={styles.calendarModalClose}>X</Text>
+              <Text style={styles.modalClose}>X</Text>
             </TouchableOpacity>
           </View>
           <CalendarProvider date={today} onDateChanged={onDateChanged} showTodayButton={true}>
@@ -1515,6 +1613,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mapview: { flex: 1 },
+  loginIconContainer: {
+    width: 50,
+    height: 50,
+    position: 'absolute',
+    right: 12,
+    bottom: 240,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   calendarIconContainer: {
     width: 50,
     height: 50,
@@ -1784,12 +1893,33 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     marginTop: 25,
   },
-  calendarModalClose: { color: 'black', fontSize: 30, fontWeight: 'bold', marginLeft: 10, marginBottom: 5 },
+  modalClose: { color: 'black', fontSize: 30, fontWeight: 'bold', marginLeft: 10, marginBottom: 5 },
   calendarView: { flex: 1, backgroundColor: 'white' },
   agendaSection: {
     color: 'black',
     textTransform: 'capitalize',
     fontSize: 18,
+  },
+  kakaoModal: {
+    width: '100%',
+    backgroundColor: 'white',
+  },
+  kakaoContainer: {
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  kakaoButton: {
+    backgroundColor: '#FEE500',
+    borderRadius: 40,
+    borderWidth: 1,
+    width: 250,
+    height: 40,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  kakaoText: {
+    textAlign: 'center',
   },
 })
 

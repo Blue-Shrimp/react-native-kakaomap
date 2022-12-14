@@ -11,6 +11,7 @@
 		13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB01A68108700A75B9A /* AppDelegate.m */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		13B07FC11A68108700A75B9A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
+		1A3D979129499D9B00879331 /* SwiftBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A3D979029499D9B00879331 /* SwiftBridge.swift */; };
 		1AB6118228DAE9420065809A /* Config.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 1AB6118128DAE9420065809A /* Config.xcconfig */; };
 		1AB611AA28DAF9950065809A /* map_pinup_custom@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 1AB6118528DAF9950065809A /* map_pinup_custom@3x.png */; };
 		1AB611AB28DAF9950065809A /* map_pin_custom.png in Resources */ = {isa = PBXBuildFile; fileRef = 1AB6118628DAF9950065809A /* map_pin_custom.png */; };
@@ -79,6 +80,8 @@
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = rnKakaoMap/Info.plist; sourceTree = "<group>"; };
 		13B07FB71A68108700A75B9A /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = main.m; path = rnKakaoMap/main.m; sourceTree = "<group>"; };
 		179E04643145CC0039D18E93 /* Pods-rnKakaoMap-rnKakaoMapTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-rnKakaoMap-rnKakaoMapTests.release.xcconfig"; path = "Target Support Files/Pods-rnKakaoMap-rnKakaoMapTests/Pods-rnKakaoMap-rnKakaoMapTests.release.xcconfig"; sourceTree = "<group>"; };
+		1A3D978F29499D9B00879331 /* rnKakaoMap-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "rnKakaoMap-Bridging-Header.h"; sourceTree = "<group>"; };
+		1A3D979029499D9B00879331 /* SwiftBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftBridge.swift; sourceTree = "<group>"; };
 		1AB6118128DAE9420065809A /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		1AB6118528DAF9950065809A /* map_pinup_custom@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "map_pinup_custom@3x.png"; sourceTree = "<group>"; };
 		1AB6118628DAF9950065809A /* map_pin_custom.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = map_pin_custom.png; sourceTree = "<group>"; };
@@ -236,6 +239,8 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB71A68108700A75B9A /* main.m */,
+				1A3D979029499D9B00879331 /* SwiftBridge.swift */,
+				1A3D978F29499D9B00879331 /* rnKakaoMap-Bridging-Header.h */,
 			);
 			name = rnKakaoMap;
 			sourceTree = "<group>";
@@ -494,7 +499,7 @@
 						TestTargetID = 13B07F861A680F5B00A75B9A;
 					};
 					13B07F861A680F5B00A75B9A = {
-						LastSwiftMigration = 1120;
+						LastSwiftMigration = 1410;
 					};
 				};
 			};
@@ -743,6 +748,7 @@
 				1AB6120828DAFAD30065809A /* KakaoMapView.m in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
 				1AB6120528DAFAC70065809A /* KakaoMapManager.m in Sources */,
+				1A3D979129499D9B00879331 /* SwiftBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -761,6 +767,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E1A3D33728D525FD0A490906 /* Pods-rnKakaoMap-rnKakaoMapTests.debug.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
@@ -788,6 +795,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 179E04643145CC0039D18E93 /* Pods-rnKakaoMap-rnKakaoMapTests.release.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COPY_PHASE_STRIP = NO;
 				INFOPLIST_FILE = rnKakaoMapTests/Info.plist;
@@ -834,6 +842,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shjang.rnkakaomap;
 				PRODUCT_NAME = rnKakaoMap;
+				SWIFT_OBJC_BRIDGING_HEADER = "rnKakaoMap-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -865,6 +874,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shjang.rnkakaomap;
 				PRODUCT_NAME = rnKakaoMap;
+				SWIFT_OBJC_BRIDGING_HEADER = "rnKakaoMap-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
