@@ -103,16 +103,17 @@ const APP = () => {
   const [calendarMarked, setCalendarMarked] = useState({})
   const [isLoginModal, setIsLoginModal] = useState(false)
   const [kakaoResult, setKakaoResult] = useState('')
+  const [isProfileModal, setIsProfileModal] = useState(false)
 
   const markerCollenction = firestore().collection('users')
 
   const sheetRef = useRef(null)
   const placeListSheetRef = useRef(null)
 
-  useEffect(() => {
+  useEffect(async () => {
     AppState.addEventListener('change', handleAppStateChange)
+    await getProfile()
     _requestPermission()
-    _downloadMarker()
     return () => {
       AppState.removeEventListener('change', handleAppStateChange)
     }
@@ -130,49 +131,39 @@ const APP = () => {
     try {
       const token = await login()
       console.log('token : ', JSON.stringify(token))
-      setKakaoResult(JSON.stringify(token))
+      getProfile()
     } catch (err) {
       console.error('login err', err)
     }
   }
 
   const signOutWithKakao = async () => {
+    setLoading(true)
     try {
       const message = await logout()
-
-      setKakaoResult(message)
+      console.log('message : ', JSON.stringify(message))
+      setKakaoResult('')
+      setMarkerDatas([])
+      setLoading(false)
     } catch (err) {
       console.error('signOut error', err)
+      setLoading(false)
     }
   }
 
   const getProfile = async () => {
+    setLoading(true)
     try {
       const profile = await getKakaoProfile()
-      console.log('profile : ', JSON.stringify(profile))
-      setKakaoResult(JSON.stringify(profile))
+      console.log('profile : ', JSON.parse(JSON.stringify(profile)))
+      setKakaoResult(JSON.parse(JSON.stringify(profile)))
+      _downloadMarker(JSON.parse(JSON.stringify(profile))?.id.toString())
+      setIsLoginModal(false)
+      setLoading(false)
     } catch (err) {
-      console.error('signOut error', err)
-    }
-  }
-
-  const getToken = async () => {
-    try {
-      const token = await getAccessToken()
-      console.log('token : ', token)
-      setKakaoResult(JSON.stringify(token))
-    } catch (err) {
-      console.error('accessToken error', err)
-    }
-  }
-
-  const unlinkKakao = async () => {
-    try {
-      const message = await unlink()
-
-      setKakaoResult(message)
-    } catch (err) {
-      console.error('signOut error', err)
+      console.error('profile error', err)
+      setIsLoginModal(true)
+      setLoading(false)
     }
   }
 
@@ -480,10 +471,10 @@ const APP = () => {
     }
   }
 
-  const _downloadMarker = async () => {
+  const _downloadMarker = async id => {
     setLoading(true)
     try {
-      const data = await markerCollenction.doc('ABC').get()
+      const data = await markerCollenction.doc(id).get()
       setMarkerDatas(data?._data?.markerData || [])
       setLoading(false)
     } catch (error) {
@@ -493,8 +484,9 @@ const APP = () => {
   }
 
   const _uploadMarker = async markers => {
+    const id = (kakaoResult?.id).toString()
     try {
-      await markerCollenction.doc('ABC').set({ markerData: markers })
+      await markerCollenction.doc(id).set({ markerData: markers })
     } catch (error) {
       console.log(error.message)
     }
@@ -1135,9 +1127,9 @@ const APP = () => {
           style={styles.loginIconContainer}
           activeOpacity={0.5}
           onPress={() => {
-            setIsLoginModal(true)
+            setIsProfileModal(true)
           }}>
-          {/* <Image style={styles.calendarIcon} source={require('./images/calendar.png')} /> */}
+          <Image style={styles.kakaoThumbnailImage} source={{ uri: kakaoResult?.thumbnailImageUrl }} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.calendarIconContainer}
@@ -1195,38 +1187,58 @@ const APP = () => {
         <View style={isSearch ? styles.placeListContainer : { display: 'none' }}>
           <FlatList data={place} renderItem={_renderItem} indicatorStyle="black"></FlatList>
         </View>
+        <Modal isVisible={isLoginModal} backdropTransitionOutTiming={0}>
+          <SafeAreaView style={styles.loginModalView}>
+            <TouchableOpacity
+              style={styles.kakaoButton}
+              onPress={() => {
+                signInWithKakao()
+              }}>
+              <Text style={styles.kakaoText}>카카오 로그인</Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </Modal>
         <Modal
-          isVisible={isLoginModal}
+          isVisible={isProfileModal}
+          style={styles.profileModalView}
           backdropTransitionOutTiming={0}
           onBackdropPress={() => {
-            setIsLoginModal(false)
+            setIsProfileModal(false)
+          }}
+          onModalHide={() => {
+            if (kakaoResult === '') {
+              setIsLoginModal(true)
+            }
           }}>
           <View style={styles.kakaoModal}>
             <TouchableOpacity
               onPress={() => {
-                setIsLoginModal(false)
+                setIsProfileModal(false)
               }}>
               <Text style={styles.modalClose}>X</Text>
             </TouchableOpacity>
             <View style={styles.kakaoContainer}>
-              <Text>{kakaoResult}</Text>
+              <Image style={styles.kakaoProfileImage} source={{ uri: kakaoResult?.profileImageUrl }} />
+              <View style={styles.kakaoInfoView}>
+                <Text>이름</Text>
+                <Text>{kakaoResult?.nickname}</Text>
+              </View>
+              <View style={styles.kakaoInfoView}>
+                <Text>아이디</Text>
+                <Text>{kakaoResult?.id}</Text>
+              </View>
+              {kakaoResult?.email === null ? null : (
+                <View style={styles.kakaoInfoView}>
+                  <Text>이메일</Text>
+                  <Text>{kakaoResult?.email}</Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={styles.kakaoButton}
                 onPress={() => {
-                  signInWithKakao()
+                  signOutWithKakao()
+                  setIsProfileModal(false)
                 }}>
-                <Text style={styles.kakaoText}>카카오 로그인</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.kakaoButton} onPress={() => getProfile()}>
-                <Text style={styles.kakaoText}>프로필 조회</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.kakaoButton} onPress={() => getToken()}>
-                <Text style={styles.kakaoText}>토큰 조회</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.kakaoButton} onPress={() => unlinkKakao()}>
-                <Text style={styles.kakaoText}>링크 해제</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.kakaoButton} onPress={() => signOutWithKakao()}>
                 <Text style={styles.kakaoText}>카카오 로그아웃</Text>
               </TouchableOpacity>
             </View>
@@ -1901,7 +1913,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   kakaoModal: {
-    width: '100%',
+    width: '80%',
     backgroundColor: 'white',
   },
   kakaoContainer: {
@@ -1917,10 +1929,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     marginTop: 10,
+    marginBottom: 20,
   },
   kakaoText: {
     textAlign: 'center',
   },
+  kakaoThumbnailImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+    borderRadius: 50,
+  },
+  loginModalView: {
+    backgroundColor: 'white',
+    left: -20,
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height - 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileModalView: { alignItems: 'center' },
+  kakaoProfileImage: {
+    width: 150,
+    height: 150,
+    marginBottom: 10,
+    borderRadius: 100,
+  },
+  kakaoInfoView: { flexDirection: 'row', justifyContent: 'space-between', width: '80%', marginBottom: 10 },
 })
 
 export default APP
