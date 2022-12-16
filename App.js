@@ -65,7 +65,10 @@ const APP = () => {
   const isTracking = useRef(false)
   const [searchText, setSearchText] = useState('')
   const [isSearch, setIsSearch] = useState(false)
+  const [userDatas, setUserDatas] = useState({})
   const [markerDatas, setMarkerDatas] = useState([])
+  const [currentAlbum, setCurrentAlbum] = useState('기본앨범')
+  const [currentAlbumChecked, setCurrentAlbumChecked] = useState('기본앨범')
   const [searchPlace, setSearchPlace] = useState({})
   const [titleText, setTitleText] = useState('')
   const [isMarkerDateModal, setIsMarkerDateModal] = useState(false)
@@ -104,6 +107,7 @@ const APP = () => {
   const [isLoginModal, setIsLoginModal] = useState(false)
   const [kakaoResult, setKakaoResult] = useState('')
   const [isProfileModal, setIsProfileModal] = useState(false)
+  const [isAlbumModal, setIsAlbumModal] = useState(false)
 
   const markerCollenction = firestore().collection('users')
 
@@ -143,6 +147,9 @@ const APP = () => {
       const message = await logout()
       console.log('message : ', JSON.stringify(message))
       setKakaoResult('')
+      setUserDatas({})
+      setCurrentAlbum('기본앨범')
+      setCurrentAlbumChecked('기본앨범')
       setMarkerDatas([])
       setLoading(false)
     } catch (err) {
@@ -157,7 +164,12 @@ const APP = () => {
       const profile = await getKakaoProfile()
       console.log('profile : ', JSON.parse(JSON.stringify(profile)))
       setKakaoResult(JSON.parse(JSON.stringify(profile)))
-      _downloadMarker(JSON.parse(JSON.stringify(profile))?.id.toString())
+      const id = JSON.parse(JSON.stringify(profile))?.id.toString()
+      const data = await markerCollenction.doc(id).get()
+      if (data?._data === undefined) {
+        await markerCollenction.doc(id).set({ 기본앨범: [] })
+      }
+      _downloadMarker(id)
       setIsLoginModal(false)
       setLoading(false)
     } catch (err) {
@@ -471,11 +483,18 @@ const APP = () => {
     }
   }
 
+  const _changeAlbum = key => {
+    setCurrentAlbum(key)
+    setMarkerDatas(userDatas[key] || [])
+  }
+
   const _downloadMarker = async id => {
     setLoading(true)
     try {
       const data = await markerCollenction.doc(id).get()
-      setMarkerDatas(data?._data?.markerData || [])
+      console.log('data?._data :', data?._data)
+      setUserDatas(data?._data)
+      setMarkerDatas(data?._data[currentAlbum] || [])
       setLoading(false)
     } catch (error) {
       setLoading(false)
@@ -486,7 +505,7 @@ const APP = () => {
   const _uploadMarker = async markers => {
     const id = (kakaoResult?.id).toString()
     try {
-      await markerCollenction.doc(id).set({ markerData: markers })
+      await markerCollenction.doc(id).update({ [currentAlbum]: markers })
     } catch (error) {
       console.log(error.message)
     }
@@ -1132,6 +1151,14 @@ const APP = () => {
           <Image style={styles.kakaoThumbnailImage} source={{ uri: kakaoResult?.thumbnailImageUrl }} />
         </TouchableOpacity>
         <TouchableOpacity
+          style={styles.albumIconContainer}
+          activeOpacity={0.5}
+          onPress={() => {
+            setIsAlbumModal(true)
+          }}>
+          <Image style={styles.albumIcon} source={require('./images/album.png')} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.calendarIconContainer}
           activeOpacity={0.5}
           onPress={() => {
@@ -1241,6 +1268,53 @@ const APP = () => {
                 }}>
                 <Text style={styles.kakaoText}>카카오 로그아웃</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        <Modal
+          isVisible={isAlbumModal}
+          style={styles.albumModalView}
+          backdropTransitionOutTiming={0}
+          onBackdropPress={() => {
+            setIsAlbumModal(false)
+          }}>
+          <View style={styles.albumModal}>
+            <TouchableOpacity
+              onPress={() => {
+                setIsAlbumModal(false)
+              }}>
+              <Text style={styles.modalClose}>X</Text>
+            </TouchableOpacity>
+            <View style={styles.albumContainer}>
+              <RadioButton.Group onValueChange={newValue => setCurrentAlbumChecked(newValue)} value={currentAlbumChecked}>
+                {Object.keys(userDatas)
+                  .reverse()
+                  .map(value => {
+                    return (
+                      <View style={styles.albumInnerView}>
+                        <RadioButton value={value} uncheckedColor={'red'} />
+                        <Text>{value}</Text>
+                      </View>
+                    )
+                  })}
+              </RadioButton.Group>
+              <View style={styles.albumButtonView}>
+                <TouchableOpacity
+                  style={styles.albumButton}
+                  onPress={() => {
+                    setIsAlbumModal(false)
+                  }}>
+                  <Text>취소</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.albumButton}
+                  onPress={() => {
+                    setIsAlbumModal(false)
+                    _changeAlbum(currentAlbumChecked)
+                  }}>
+                  <Text>확인</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -1630,11 +1704,26 @@ const styles = StyleSheet.create({
     height: 50,
     position: 'absolute',
     right: 12,
+    bottom: 300,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  albumIconContainer: {
+    width: 50,
+    height: 50,
+    position: 'absolute',
+    right: 12,
     bottom: 240,
     backgroundColor: 'white',
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  albumIcon: {
+    width: 32,
+    height: 32,
   },
   calendarIconContainer: {
     width: 50,
@@ -1956,6 +2045,20 @@ const styles = StyleSheet.create({
     borderRadius: 100,
   },
   kakaoInfoView: { flexDirection: 'row', justifyContent: 'space-between', width: '80%', marginBottom: 10 },
+  albumModalView: { alignItems: 'center' },
+  albumModal: {
+    width: '100%',
+    backgroundColor: 'white',
+  },
+  albumContainer: {
+    alignItems: 'center',
+  },
+  albumInnerView: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  albumButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
+  albumButton: { paddingRight: 10 },
 })
 
 export default APP
