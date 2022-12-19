@@ -108,6 +108,8 @@ const APP = () => {
   const [kakaoResult, setKakaoResult] = useState('')
   const [isProfileModal, setIsProfileModal] = useState(false)
   const [isAlbumModal, setIsAlbumModal] = useState(false)
+  const [isAlbumCreateModal, setIsAlbumCreateModal] = useState(false)
+  const [albumText, setAlbumText] = useState('')
 
   const markerCollenction = firestore().collection('users')
 
@@ -167,7 +169,7 @@ const APP = () => {
       const id = JSON.parse(JSON.stringify(profile))?.id.toString()
       const data = await markerCollenction.doc(id).get()
       if (data?._data === undefined) {
-        await markerCollenction.doc(id).set({ 기본앨범: [] })
+        await markerCollenction.doc(id).set({ 기본앨범: { markerData: [], createdAt: new Date() } })
       }
       _downloadMarker(id)
       setIsLoginModal(false)
@@ -485,7 +487,7 @@ const APP = () => {
 
   const _changeAlbum = key => {
     setCurrentAlbum(key)
-    setMarkerDatas(userDatas[key] || [])
+    setMarkerDatas(userDatas[key]?.markerData || [])
   }
 
   const _downloadMarker = async id => {
@@ -493,8 +495,17 @@ const APP = () => {
     try {
       const data = await markerCollenction.doc(id).get()
       console.log('data?._data :', data?._data)
-      setUserDatas(data?._data)
-      setMarkerDatas(data?._data[currentAlbum] || [])
+      const sortValue = Object.fromEntries(
+        Object.entries(data?._data).sort((a, b) => {
+          return new Date(a[1].createdAt._seconds) < new Date(b[1].createdAt._seconds)
+            ? -1
+            : new Date(a[1].createdAt._seconds) > new Date(b[1].createdAt._seconds)
+            ? 1
+            : 0
+        }),
+      )
+      setUserDatas(sortValue)
+      setMarkerDatas(data?._data[currentAlbum]?.markerData || [])
       setLoading(false)
     } catch (error) {
       setLoading(false)
@@ -505,7 +516,7 @@ const APP = () => {
   const _uploadMarker = async markers => {
     const id = (kakaoResult?.id).toString()
     try {
-      await markerCollenction.doc(id).update({ [currentAlbum]: markers })
+      await markerCollenction.doc(id).update({ [currentAlbum]: { markerData: markers, createdAt: userDatas[currentAlbum].createdAt } })
     } catch (error) {
       console.log(error.message)
     }
@@ -563,6 +574,7 @@ const APP = () => {
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     await _uploadMarker([...others, marker])
+    await _downloadMarker((kakaoResult?.id).toString())
     setFileResponseList([])
     sheetRef.current.snapTo(2)
     setLoading(false)
@@ -579,6 +591,7 @@ const APP = () => {
     let others = markerDatas.filter(v => v.tag !== searchPlace.id)
     setMarkerDatas([...others, marker])
     await _uploadMarker([...others, marker])
+    await _downloadMarker((kakaoResult?.id).toString())
     setFileResponseList([])
     sheetRef.current.snapTo(2)
     setLoading(false)
@@ -598,6 +611,7 @@ const APP = () => {
       }, [])
     setMarkerDatas(deleteMarkers)
     await _uploadMarker(deleteMarkers)
+    await _downloadMarker((kakaoResult?.id).toString())
     setFileResponseList([])
     sheetRef.current.snapTo(2)
     setLoading(false)
@@ -1122,6 +1136,15 @@ const APP = () => {
     }
   }
 
+  const _onChangeAlbumText = async text => {
+    setAlbumText(text)
+  }
+
+  const _albumCreate = async () => {
+    const id = (kakaoResult?.id).toString()
+    await markerCollenction.doc(id).update({ [albumText]: { markerData: [], createdAt: new Date() } })
+  }
+
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -1286,22 +1309,30 @@ const APP = () => {
               <Text style={styles.modalClose}>X</Text>
             </TouchableOpacity>
             <View style={styles.albumContainer}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginRight: 10 }}>
+                <Text style={styles.albumText}>앨범 목록 ({Object.keys(userDatas).length})</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsAlbumCreateModal(true)
+                  }}>
+                  <Image source={require('./images/plus.png')} style={{ width: 20, height: 20, marginTop: 6 }}></Image>
+                </TouchableOpacity>
+              </View>
               <RadioButton.Group onValueChange={newValue => setCurrentAlbumChecked(newValue)} value={currentAlbumChecked}>
-                {Object.keys(userDatas)
-                  .reverse()
-                  .map(value => {
-                    return (
-                      <View style={styles.albumInnerView}>
-                        <RadioButton value={value} uncheckedColor={'red'} />
-                        <Text>{value}</Text>
-                      </View>
-                    )
-                  })}
+                {Object.keys(userDatas).map((value, index) => {
+                  return (
+                    <View style={styles.albumInnerView} key={index}>
+                      <RadioButton value={value} uncheckedColor={'red'} />
+                      <Text>{value}</Text>
+                    </View>
+                  )
+                })}
               </RadioButton.Group>
               <View style={styles.albumButtonView}>
                 <TouchableOpacity
                   style={styles.albumButton}
                   onPress={() => {
+                    setCurrentAlbumChecked(currentAlbum)
                     setIsAlbumModal(false)
                   }}>
                   <Text>취소</Text>
@@ -1317,6 +1348,55 @@ const APP = () => {
               </View>
             </View>
           </View>
+          <Modal
+            isVisible={isAlbumCreateModal}
+            style={{ flex: 1, justifyContent: 'center', width: 300, alignSelf: 'center' }}
+            backdropTransitionOutTiming={0}
+            onBackdropPress={() => {
+              setIsAlbumCreateModal(false)
+            }}>
+            <View style={styles.albumTextModal}>
+              <Text style={styles.albumText}>앨범 생성하기</Text>
+              <TextInput
+                placeholder={'앨범 이름'}
+                placeholderTextColor={'gray'}
+                style={{ borderBottomWidth: 1, borderColor: 'gray' }}
+                onChangeText={_onChangeAlbumText}
+                autoCapitalize={'none'}
+                autoCorrect={false}
+                defaultValue={albumText}
+                textAlignVertical={'center'}
+                underlineColorAndroid={'transparent'}
+                returnKeyType={'search'}
+                keyboardType={'default'}
+                keyboardAppearance={'default'}
+                value={albumText}
+              />
+              <View style={styles.albumTextButtonView}>
+                <TouchableOpacity
+                  style={styles.albumTextButton}
+                  onPress={() => {
+                    setAlbumText('')
+                    setIsAlbumCreateModal(false)
+                  }}>
+                  <Text>취소</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.albumTextButton}
+                  onPress={async () => {
+                    if (albumText === '') {
+                      return
+                    }
+                    await _albumCreate()
+                    await _downloadMarker((kakaoResult?.id).toString())
+                    setAlbumText('')
+                    setIsAlbumCreateModal(false)
+                  }}>
+                  <Text>생성</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </Modal>
         <Modal
           isVisible={isCalendarModal}
@@ -2051,7 +2131,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   albumContainer: {
-    alignItems: 'center',
+    paddingLeft: 30,
   },
   albumInnerView: {
     flexDirection: 'row',
@@ -2059,6 +2139,14 @@ const styles = StyleSheet.create({
   },
   albumButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
   albumButton: { paddingRight: 10 },
+  albumText: { fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
+  albumTextModal: {
+    width: '100%',
+    backgroundColor: 'white',
+    padding: 20,
+  },
+  albumTextButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
+  albumTextButton: { marginLeft: 10, marginTop: 10 },
 })
 
 export default APP
