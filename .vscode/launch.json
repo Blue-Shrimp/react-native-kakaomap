@@ -14,7 +14,7 @@
     },
     {
       "name": "Develop iOS",
-      "runArguments": ["--scheme=Develop"],
+      "runArguments": ["--scheme=Develop", "--device", "SHSH"],
       "cwd": "${workspaceFolder}",
       "type": "reactnative",
       "request": "launch",

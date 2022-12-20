@@ -490,7 +490,7 @@ const APP = () => {
     setMarkerDatas(userDatas[key]?.markerData || [])
   }
 
-  const _downloadMarker = async id => {
+  const _downloadMarker = async (id, key = currentAlbum) => {
     setLoading(true)
     try {
       const data = await markerCollenction.doc(id).get()
@@ -505,7 +505,7 @@ const APP = () => {
         }),
       )
       setUserDatas(sortValue)
-      setMarkerDatas(data?._data[currentAlbum]?.markerData || [])
+      setMarkerDatas(data?._data[key]?.markerData || [])
       setLoading(false)
     } catch (error) {
       setLoading(false)
@@ -1145,6 +1145,17 @@ const APP = () => {
     await markerCollenction.doc(id).update({ [albumText]: { markerData: [], createdAt: new Date() } })
   }
 
+  const _albumDelete = async value => {
+    const id = (kakaoResult?.id).toString()
+    await markerCollenction.doc(id).update({
+      [value]: firestore.FieldValue.delete(),
+    })
+    if (currentAlbum === value) {
+      setCurrentAlbum('기본앨범')
+      setCurrentAlbumChecked('기본앨범')
+    }
+  }
+
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -1261,12 +1272,6 @@ const APP = () => {
             }
           }}>
           <View style={styles.kakaoModal}>
-            <TouchableOpacity
-              onPress={() => {
-                setIsProfileModal(false)
-              }}>
-              <Text style={styles.modalClose}>X</Text>
-            </TouchableOpacity>
             <View style={styles.kakaoContainer}>
               <Image style={styles.kakaoProfileImage} source={{ uri: kakaoResult?.profileImageUrl }} />
               <View style={styles.kakaoInfoView}>
@@ -1302,32 +1307,41 @@ const APP = () => {
             setIsAlbumModal(false)
           }}>
           <View style={styles.albumModal}>
-            <TouchableOpacity
-              onPress={() => {
-                setIsAlbumModal(false)
-              }}>
-              <Text style={styles.modalClose}>X</Text>
-            </TouchableOpacity>
             <View style={styles.albumContainer}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginRight: 10 }}>
+              <View style={styles.albumView}>
                 <Text style={styles.albumText}>앨범 목록 ({Object.keys(userDatas).length})</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setIsAlbumCreateModal(true)
                   }}>
-                  <Image source={require('./images/plus.png')} style={{ width: 20, height: 20, marginTop: 6 }}></Image>
+                  <Image source={require('./images/plus.png')} style={styles.plusImage}></Image>
                 </TouchableOpacity>
               </View>
-              <RadioButton.Group onValueChange={newValue => setCurrentAlbumChecked(newValue)} value={currentAlbumChecked}>
-                {Object.keys(userDatas).map((value, index) => {
-                  return (
-                    <View style={styles.albumInnerView} key={index}>
-                      <RadioButton value={value} uncheckedColor={'red'} />
-                      <Text>{value}</Text>
-                    </View>
-                  )
-                })}
-              </RadioButton.Group>
+              <ScrollView style={styles.albumScrollView} indicatorStyle="black">
+                <RadioButton.Group onValueChange={newValue => setCurrentAlbumChecked(newValue)} value={currentAlbumChecked}>
+                  {Object.keys(userDatas).map((value, index) => {
+                    return (
+                      <View style={styles.albumInnerView} key={index}>
+                        <View style={styles.albumRadioView}>
+                          <RadioButton value={value} uncheckedColor={'red'} />
+                          <Text style={styles.albumRadioText}>{value}</Text>
+                        </View>
+                        {value === '기본앨범' ? null : (
+                          <TouchableOpacity
+                            onPress={async () => {
+                              setLoading(true)
+                              await _albumDelete(value)
+                              await _downloadMarker((kakaoResult?.id).toString(), currentAlbum === value ? '기본앨범' : currentAlbum)
+                              setLoading(false)
+                            }}>
+                            <Image source={require('./images/minus.png')} style={styles.minusImage}></Image>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )
+                  })}
+                </RadioButton.Group>
+              </ScrollView>
               <View style={styles.albumButtonView}>
                 <TouchableOpacity
                   style={styles.albumButton}
@@ -1350,7 +1364,7 @@ const APP = () => {
           </View>
           <Modal
             isVisible={isAlbumCreateModal}
-            style={{ flex: 1, justifyContent: 'center', width: 300, alignSelf: 'center' }}
+            style={styles.albumCreateModal}
             backdropTransitionOutTiming={0}
             onBackdropPress={() => {
               setIsAlbumCreateModal(false)
@@ -1360,7 +1374,7 @@ const APP = () => {
               <TextInput
                 placeholder={'앨범 이름'}
                 placeholderTextColor={'gray'}
-                style={{ borderBottomWidth: 1, borderColor: 'gray' }}
+                style={styles.albumPlaceholder}
                 onChangeText={_onChangeAlbumText}
                 autoCapitalize={'none'}
                 autoCorrect={false}
@@ -1371,6 +1385,7 @@ const APP = () => {
                 keyboardType={'default'}
                 keyboardAppearance={'default'}
                 value={albumText}
+                autoFocus
               />
               <View style={styles.albumTextButtonView}>
                 <TouchableOpacity
@@ -1384,13 +1399,24 @@ const APP = () => {
                 <TouchableOpacity
                   style={styles.albumTextButton}
                   onPress={async () => {
+                    setLoading(true)
                     if (albumText === '') {
+                      return
+                    }
+                    let cnt = 0
+                    Object.keys(userDatas).map(value => {
+                      if (value === albumText) {
+                        cnt++
+                      }
+                    })
+                    if (cnt > 0) {
                       return
                     }
                     await _albumCreate()
                     await _downloadMarker((kakaoResult?.id).toString())
                     setAlbumText('')
                     setIsAlbumCreateModal(false)
+                    setLoading(false)
                   }}>
                   <Text>생성</Text>
                 </TouchableOpacity>
@@ -2088,6 +2114,7 @@ const styles = StyleSheet.create({
   kakaoContainer: {
     justifyContent: 'flex-end',
     alignItems: 'center',
+    paddingTop: 20,
   },
   kakaoButton: {
     backgroundColor: '#FEE500',
@@ -2132,13 +2159,16 @@ const styles = StyleSheet.create({
   },
   albumContainer: {
     paddingLeft: 30,
+    paddingTop: 20,
   },
   albumInnerView: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 20,
+    justifyContent: 'space-between',
   },
-  albumButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
-  albumButton: { paddingRight: 10 },
+  albumButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 20 },
+  albumButton: { paddingRight: 20, marginTop: 15 },
   albumText: { fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
   albumTextModal: {
     width: '100%',
@@ -2147,6 +2177,14 @@ const styles = StyleSheet.create({
   },
   albumTextButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
   albumTextButton: { marginLeft: 10, marginTop: 10 },
+  albumView: { flexDirection: 'row', justifyContent: 'space-between', marginRight: 20 },
+  plusImage: { width: 20, height: 20, marginTop: 6 },
+  minusImage: { width: 20, height: 20 },
+  albumCreateModal: { flex: 1, justifyContent: 'center', width: 300, alignSelf: 'center' },
+  albumPlaceholder: { borderBottomWidth: 1, borderColor: 'gray' },
+  albumScrollView: { maxHeight: 150 },
+  albumRadioView: { flexDirection: 'row' },
+  albumRadioText: { alignSelf: 'center' },
 })
 
 export default APP
