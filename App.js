@@ -1366,6 +1366,8 @@ const APP = () => {
                         Preference.clear('shareData')
                         setShareDatas({})
                         setPickerValue('나의 앨범')
+                        setCurrentAlbum('기본앨범')
+                        setCurrentAlbumChecked('기본앨범')
                         setIsDefaultAlbum(true)
                         setMarkerDatas(userDatas['기본앨범']?.markerData || [])
                         setPickerItems([{ label: '나의 앨범', value: '나의 앨범' }])
