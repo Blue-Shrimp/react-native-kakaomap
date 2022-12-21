@@ -36,6 +36,7 @@ import Video from 'react-native-video'
 import { RadioButton } from 'react-native-paper'
 import { CalendarProvider, ExpandableCalendar, AgendaList, LocaleConfig } from 'react-native-calendars'
 import { login, logout, getProfile as getKakaoProfile, unlink, getAccessToken } from '@react-native-seoul/kakao-login'
+import DropDownPicker from 'react-native-dropdown-picker'
 
 const kakaoGeocodeUrl = 'https://dapi.kakao.com/v2/local/search/keyword.json'
 const kakaoRestApiKey = '6e1402fdd53ff5da2517db3fb6f6b7b4'
@@ -110,6 +111,15 @@ const APP = () => {
   const [isAlbumModal, setIsAlbumModal] = useState(false)
   const [isAlbumCreateModal, setIsAlbumCreateModal] = useState(false)
   const [albumText, setAlbumText] = useState('')
+  const [isShareFriendModal, setIsShareFriendModal] = useState(false)
+  const [friendIdText, setFriendIdText] = useState('')
+  const [friendNameText, setFriendNameText] = useState('')
+  const isCorrectId = useRef(true)
+  const [shareDatas, setShareDatas] = useState({})
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerValue, setPickerValue] = useState('나의 앨범')
+  const [pickerItems, setPickerItems] = useState([{ label: '나의 앨범', value: '나의 앨범' }])
+  const [isDefaultAlbum, setIsDefaultAlbum] = useState(true)
 
   const markerCollenction = firestore().collection('users')
 
@@ -118,8 +128,9 @@ const APP = () => {
 
   useEffect(async () => {
     AppState.addEventListener('change', handleAppStateChange)
-    await getProfile()
     _requestPermission()
+    await getProfile()
+    await _shareDataDownload()
     return () => {
       AppState.removeEventListener('change', handleAppStateChange)
     }
@@ -150,6 +161,11 @@ const APP = () => {
       console.log('message : ', JSON.stringify(message))
       setKakaoResult('')
       setUserDatas({})
+      Preference.clear('shareData')
+      setPickerValue('나의 앨범')
+      setIsDefaultAlbum(true)
+      setPickerItems([{ label: '나의 앨범', value: '나의 앨범' }])
+      setShareDatas({})
       setCurrentAlbum('기본앨범')
       setCurrentAlbumChecked('기본앨범')
       setMarkerDatas([])
@@ -487,7 +503,22 @@ const APP = () => {
 
   const _changeAlbum = key => {
     setCurrentAlbum(key)
-    setMarkerDatas(userDatas[key]?.markerData || [])
+    setMarkerDatas(pickerValue === '나의 앨범' ? userDatas[key]?.markerData : shareDatas?.albumData[key]?.markerData || [])
+  }
+
+  const _shareDataDownload = async () => {
+    setLoading(true)
+    try {
+      const shareData = Preference.get('shareData')
+      console.log('shareData : ', shareData)
+      if (shareData !== undefined) {
+        await _friendInvite(shareData?.friendId, shareData?.friendName)
+      }
+      setLoading(false)
+    } catch (error) {
+      setLoading(false)
+      console.log(error.message)
+    }
   }
 
   const _downloadMarker = async (id, key = currentAlbum) => {
@@ -497,11 +528,7 @@ const APP = () => {
       console.log('data?._data :', data?._data)
       const sortValue = Object.fromEntries(
         Object.entries(data?._data).sort((a, b) => {
-          return new Date(a[1].createdAt._seconds) < new Date(b[1].createdAt._seconds)
-            ? -1
-            : new Date(a[1].createdAt._seconds) > new Date(b[1].createdAt._seconds)
-            ? 1
-            : 0
+          return a[1].createdAt.toDate() > b[1].createdAt.toDate() ? 1 : a[1].createdAt.toDate() === b[1].createdAt.toDate() ? 0 : -1
         }),
       )
       setUserDatas(sortValue)
@@ -1136,8 +1163,47 @@ const APP = () => {
     }
   }
 
+  const _onChangeFriendIdText = async text => {
+    setFriendIdText(text)
+  }
+
+  const _onChangeFriendNameText = async text => {
+    setFriendNameText(text)
+  }
+
+  const _friendInvite = async (id = friendIdText, name = friendNameText) => {
+    try {
+      const data = await markerCollenction.doc(id).get()
+      const sortValue = Object.fromEntries(
+        Object.entries(data?._data).sort((a, b) => {
+          return new Date(a[1].createdAt._seconds) < new Date(b[1].createdAt._seconds)
+            ? -1
+            : new Date(a[1].createdAt._seconds) > new Date(b[1].createdAt._seconds)
+            ? 1
+            : 0
+        }),
+      )
+      const shareData = {
+        friendId: id,
+        friendName: name,
+        albumData: sortValue,
+      }
+      console.log('shareData :', shareData)
+      setShareDatas(shareData)
+      setPickerItems([
+        { label: '나의 앨범', value: '나의 앨범' },
+        { label: '공유 앨범', value: '공유 앨범' },
+      ])
+      Preference.set('shareData', shareData)
+      return true
+    } catch (error) {
+      console.log('error : ', error)
+      return false
+    }
+  }
+
   const _onChangeAlbumText = async text => {
-    setAlbumText(text)
+    setAlbumText(text.replace(/^[0-9]/g, ''))
   }
 
   const _albumCreate = async () => {
@@ -1280,7 +1346,7 @@ const APP = () => {
               </View>
               <View style={styles.kakaoInfoView}>
                 <Text>아이디</Text>
-                <Text>{kakaoResult?.id}</Text>
+                <Text selectable={true}>{kakaoResult?.id}</Text>
               </View>
               {kakaoResult?.email === null ? null : (
                 <View style={styles.kakaoInfoView}>
@@ -1288,6 +1354,35 @@ const APP = () => {
                   <Text>{kakaoResult?.email}</Text>
                 </View>
               )}
+              <View style={styles.kakaoInfoView}>
+                <Text>함께하는 친구</Text>
+                {Object.keys(shareDatas).length > 0 ? (
+                  <View style={styles.shareFriendView}>
+                    <Text style={styles.kakaoText}>
+                      {shareDatas.friendName}({shareDatas.friendId})
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Preference.clear('shareData')
+                        setShareDatas({})
+                        setPickerValue('나의 앨범')
+                        setIsDefaultAlbum(true)
+                        setMarkerDatas(userDatas['기본앨범']?.markerData || [])
+                        setPickerItems([{ label: '나의 앨범', value: '나의 앨범' }])
+                      }}>
+                      <Image source={require('./images/minus.png')} style={styles.friendDeleteImage}></Image>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.shareFriendText}
+                    onPress={() => {
+                      setIsShareFriendModal(true)
+                    }}>
+                    <Text style={styles.kakaoText}>공유</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <TouchableOpacity
                 style={styles.kakaoButton}
                 onPress={() => {
@@ -1298,28 +1393,136 @@ const APP = () => {
               </TouchableOpacity>
             </View>
           </View>
+          <Modal
+            isVisible={isShareFriendModal}
+            style={styles.shareFriendModal}
+            backdropTransitionOutTiming={0}
+            onBackdropPress={() => {
+              setIsShareFriendModal(false)
+            }}
+            onModalHide={() => {
+              isCorrectId.current = true
+              setFriendIdText('')
+              setFriendNameText('')
+            }}>
+            <View style={styles.albumTextModal}>
+              <Text style={styles.albumText}>친구와 공유하기</Text>
+              <TextInput
+                placeholder={'친구 아이디'}
+                placeholderTextColor={'gray'}
+                style={isCorrectId.current ? styles.albumPlaceholder : styles.albumErrorPlaceholder}
+                onChangeText={_onChangeFriendIdText}
+                autoCapitalize={'none'}
+                autoCorrect={false}
+                defaultValue={friendIdText}
+                textAlignVertical={'center'}
+                underlineColorAndroid={'transparent'}
+                returnKeyType={'search'}
+                keyboardType={'default'}
+                keyboardAppearance={'default'}
+                value={friendIdText}
+                autoFocus
+              />
+              {isCorrectId.current ? null : <Text style={styles.notCorrectId}>해당 아이디가 없습니다.</Text>}
+              <TextInput
+                placeholder={'친구 별명'}
+                placeholderTextColor={'gray'}
+                style={{ ...styles.albumPlaceholder, marginTop: 20 }}
+                onChangeText={_onChangeFriendNameText}
+                autoCapitalize={'none'}
+                autoCorrect={false}
+                defaultValue={friendNameText}
+                textAlignVertical={'center'}
+                underlineColorAndroid={'transparent'}
+                returnKeyType={'search'}
+                keyboardType={'default'}
+                keyboardAppearance={'default'}
+                value={friendNameText}
+              />
+              <View style={styles.albumTextButtonView}>
+                <TouchableOpacity
+                  style={styles.albumTextButton}
+                  onPress={() => {
+                    setIsShareFriendModal(false)
+                  }}>
+                  <Text>취소</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.albumTextButton}
+                  onPress={async () => {
+                    setLoading(true)
+                    if (friendIdText === '') {
+                      return
+                    }
+                    if (friendNameText === '') {
+                      return
+                    }
+                    if (friendIdText === (kakaoResult?.id).toString()) {
+                      return
+                    }
+                    const result = await _friendInvite()
+                    if (result) {
+                      setIsShareFriendModal(false)
+                    } else {
+                      isCorrectId.current = false
+                    }
+                    setLoading(false)
+                  }}>
+                  <Text>공유</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </Modal>
-        <Modal
-          isVisible={isAlbumModal}
-          style={styles.albumModalView}
-          backdropTransitionOutTiming={0}
-          onBackdropPress={() => {
-            setIsAlbumModal(false)
-          }}>
+        <Modal isVisible={isAlbumModal} style={styles.albumModalView} backdropTransitionOutTiming={0} onModalHide={() => setPickerOpen(false)}>
           <View style={styles.albumModal}>
             <View style={styles.albumContainer}>
+              <DropDownPicker
+                style={styles.albumPicker}
+                containerStyle={styles.albumPickerContainer}
+                open={pickerOpen}
+                value={pickerValue}
+                items={pickerItems}
+                setOpen={setPickerOpen}
+                setValue={setPickerValue}
+                setItems={setPickerItems}
+                placeholder={'나의 앨범'}
+                onChangeValue={value => {
+                  let cnt = 0
+                  if (value === '나의 앨범') {
+                    Object.keys(userDatas).map((v, index) => {
+                      if (v === currentAlbum) {
+                        cnt++
+                      }
+                    })
+                  } else {
+                    Object.keys(shareDatas?.albumData).map((v, index) => {
+                      if (v === currentAlbum) {
+                        cnt++
+                      }
+                    })
+                  }
+                  if (cnt > 0) {
+                    setCurrentAlbumChecked(currentAlbum)
+                  } else {
+                    setCurrentAlbumChecked('기본앨범')
+                  }
+                }}
+              />
               <View style={styles.albumView}>
-                <Text style={styles.albumText}>앨범 목록 ({Object.keys(userDatas).length})</Text>
+                <Text style={styles.albumText}>
+                  {pickerValue} ({Object.keys(pickerValue === '나의 앨범' ? userDatas : shareDatas?.albumData).length})
+                </Text>
                 <TouchableOpacity
                   onPress={() => {
                     setIsAlbumCreateModal(true)
                   }}>
-                  <Image source={require('./images/plus.png')} style={styles.plusImage}></Image>
+                  {pickerValue === '나의 앨범' ? <Image source={require('./images/plus.png')} style={styles.plusImage}></Image> : null}
                 </TouchableOpacity>
               </View>
               <ScrollView style={styles.albumScrollView} indicatorStyle="black">
                 <RadioButton.Group onValueChange={newValue => setCurrentAlbumChecked(newValue)} value={currentAlbumChecked}>
-                  {Object.keys(userDatas).map((value, index) => {
+                  {Object.keys(pickerValue === '나의 앨범' ? userDatas : shareDatas?.albumData).map((value, index) => {
                     return (
                       <View style={styles.albumInnerView} key={index}>
                         <View style={styles.albumRadioView}>
@@ -1334,7 +1537,7 @@ const APP = () => {
                               await _downloadMarker((kakaoResult?.id).toString(), currentAlbum === value ? '기본앨범' : currentAlbum)
                               setLoading(false)
                             }}>
-                            <Image source={require('./images/minus.png')} style={styles.minusImage}></Image>
+                            {pickerValue === '나의 앨범' ? <Image source={require('./images/minus.png')} style={styles.minusImage}></Image> : null}
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1348,6 +1551,11 @@ const APP = () => {
                   onPress={() => {
                     setCurrentAlbumChecked(currentAlbum)
                     setIsAlbumModal(false)
+                    if (isDefaultAlbum) {
+                      setPickerValue('나의 앨범')
+                    } else {
+                      setPickerValue('공유 앨범')
+                    }
                   }}>
                   <Text>취소</Text>
                 </TouchableOpacity>
@@ -1356,6 +1564,11 @@ const APP = () => {
                   onPress={() => {
                     setIsAlbumModal(false)
                     _changeAlbum(currentAlbumChecked)
+                    if (pickerValue === '나의 앨범') {
+                      setIsDefaultAlbum(true)
+                    } else {
+                      setIsDefaultAlbum(false)
+                    }
                   }}>
                   <Text>확인</Text>
                 </TouchableOpacity>
@@ -1368,6 +1581,9 @@ const APP = () => {
             backdropTransitionOutTiming={0}
             onBackdropPress={() => {
               setIsAlbumCreateModal(false)
+            }}
+            onModalHide={() => {
+              setAlbumText('')
             }}>
             <View style={styles.albumTextModal}>
               <Text style={styles.albumText}>앨범 생성하기</Text>
@@ -1391,7 +1607,6 @@ const APP = () => {
                 <TouchableOpacity
                   style={styles.albumTextButton}
                   onPress={() => {
-                    setAlbumText('')
                     setIsAlbumCreateModal(false)
                   }}>
                   <Text>취소</Text>
@@ -1414,7 +1629,6 @@ const APP = () => {
                     }
                     await _albumCreate()
                     await _downloadMarker((kakaoResult?.id).toString())
-                    setAlbumText('')
                     setIsAlbumCreateModal(false)
                     setLoading(false)
                   }}>
@@ -2108,7 +2322,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   kakaoModal: {
-    width: '80%',
+    width: '90%',
     backgroundColor: 'white',
   },
   kakaoContainer: {
@@ -2151,7 +2365,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 100,
   },
-  kakaoInfoView: { flexDirection: 'row', justifyContent: 'space-between', width: '80%', marginBottom: 10 },
+  kakaoInfoView: { flexDirection: 'row', justifyContent: 'space-between', width: '90%', marginBottom: 10 },
   albumModalView: { alignItems: 'center' },
   albumModal: {
     width: '100%',
@@ -2175,16 +2389,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 20,
   },
-  albumTextButtonView: { alignSelf: 'flex-end', flexDirection: 'row', paddingBottom: 10 },
-  albumTextButton: { marginLeft: 10, marginTop: 10 },
+  albumTextButtonView: { alignSelf: 'flex-end', flexDirection: 'row' },
+  albumTextButton: { marginLeft: 10, marginTop: 20 },
   albumView: { flexDirection: 'row', justifyContent: 'space-between', marginRight: 20 },
   plusImage: { width: 20, height: 20, marginTop: 6 },
   minusImage: { width: 20, height: 20 },
+  friendDeleteImage: { width: 20, height: 20, marginLeft: 5 },
   albumCreateModal: { flex: 1, justifyContent: 'center', width: 300, alignSelf: 'center' },
   albumPlaceholder: { borderBottomWidth: 1, borderColor: 'gray' },
+  albumErrorPlaceholder: { borderBottomWidth: 1, borderColor: 'red' },
   albumScrollView: { maxHeight: 150 },
   albumRadioView: { flexDirection: 'row' },
   albumRadioText: { alignSelf: 'center' },
+  shareFriendView: { flexDirection: 'row' },
+  shareFriendText: {
+    backgroundColor: '#FEE500',
+    borderRadius: 40,
+    borderWidth: 1,
+    padding: 4,
+  },
+  shareFriendModal: { flex: 1, justifyContent: 'center', width: 300, alignSelf: 'center' },
+  notCorrectId: { color: 'red', marginTop: 5 },
+  albumPicker: { minHeight: 20, width: 110, marginBottom: 20 },
+  albumPickerContainer: { width: 110 },
 })
 
 export default APP
